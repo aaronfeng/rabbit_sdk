@@ -85,7 +85,7 @@ Q: should publishes be totally async, even in the presence of
 - messages can be correlated to other messages
 - messages are persistent and all created broker entities are durable
 
-msg = {from,to,reply_to,message_id,correlation_id,body}
+msg = {properties, body}
 
 methods:
 - init(connection, optional msg_id_prefix). The msg_id_prefix forms
@@ -117,7 +117,6 @@ props:
 - readonly connection, sending_channel, receiving_channel
 - commit/checkpoint every n msgs / ms, or wait n ms
 - 'sent', 'received' and 'lifecycle_event' callback handlers
-- message props = {delivery_mode=persistent}
 
 NB: internally we use *two* channels, one for publishes and one for
 deliveries/acks. This keeps the concurrency handling simpler and also
