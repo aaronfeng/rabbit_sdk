@@ -29,6 +29,7 @@ at-least-once delivery in the presence of
   - qos prefetch
   - publishes since last commit/cancel / checkpoint, or during last n ms
     (depending on mode)
+  - pending acks
 - automatically reconnects in the event of errors that are not the
   client/app's fault
 - on reconnect the channels are re-opened and for each channel
@@ -36,6 +37,10 @@ at-least-once delivery in the presence of
   - the qos prefetch is (re)set
   - subscriptions are recreated
   - buffered publishes are resent
+- acks for messages delivered in a previous (i.e. not the current)
+  session are silently dropped (or, rather, we drop all acks that
+  aren't pending) - otherwise the server would reject
+  them with an error
 - callback to notify app when broker is deemed to have accepted
   responsibilty for a message. By persisting this info apps can limit
   the amount of resends they have to do in the event of a client
@@ -50,6 +55,8 @@ props:
   - maximum retries
   - buffer_duration (keep outbound messages for n ms, in case resend
     is needed)
+
+***** no replay of commands
 
 The trouble with replaying commands is that we may stomp on resources
 that have been created/deleted by other connections.
@@ -81,8 +88,8 @@ Q: should publishes be totally async, even in the presence of
 msg = {from,to,reply_to,message_id,correlation_id,body}
 
 methods:
-- constructor that takes a Connection and optional id prefix. This
-  forms the first part of ids created with next_id(). It should be
+- init(connection, optional msg_id_prefix). The msg_id_prefix forms
+  the first part of ids created with next_id(). It should be
   monotonically increasing *between runs*. The currrent time is prob
   good enough for most apps, and that's the default. But apps may also
   consider keeping a disk-based counter.
@@ -90,6 +97,12 @@ methods:
   field. It is important that apps call 'send' with monotonically
   increasing ids.
 - send(msg)
+- callback initialised(void) - invoked when channels have been
+  created; can be used to override default exchange/queue declaration
+  logic. When no callback is present, the default behaviour is to
+  declare a queue w props name=queue, durable=true, exclusive=false,
+  auto-delete=false, and bind it to exchange (unless exchange=="")
+  with bk=name. No exchange is declared by default.
 - callback sent(msg) - invoked when broker has accepted
   responsibility
 - callback received(msg) - invoked for inbound messages
@@ -99,15 +112,12 @@ methods:
   - single-threaded, i.e. only one invocation at a time
 
 props:
-- exchange="", queue=""
-- declare_exchange=false (w props durable=true, type=direct)
-- declare_queue=true (w props name=queue, durable=true,
-  exclusive=false, auto-delete=false, and bind it to exchange (unless
-  exchange=="") with bk=name)
+- identity, exchange="", queue=identity
+- prefetch_limit=0
+- readonly connection, sending_channel, receiving_channel
 - commit/checkpoint every n msgs / ms, or wait n ms
 - 'sent', 'received' and 'lifecycle_event' callback handlers
 - message props = {delivery_mode=persistent}
-- prefetch_limit=0
 
 NB: internally we use *two* channels, one for publishes and one for
 deliveries/acks. This keeps the concurrency handling simpler and also
