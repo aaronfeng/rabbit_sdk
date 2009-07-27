@@ -98,8 +98,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public MessageId NextId() {
-            m_msgIdSuffix++;
-            return ""; //TODO: padded msgIdPrefix ++ padded msgIdSuffix
+            return System.String.Format("{0:x8}{1:x8}",
+                                        m_msgIdPrefix, m_msgIdSuffix++);
         }
 
         public void Send(IMessage m) {
