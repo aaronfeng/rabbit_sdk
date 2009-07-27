@@ -1,0 +1,407 @@
+* settings
+
+#+LINK: bug https://extra.lshift.net/bugzilla/show_bug.cgi?id=
+#+TODO: TODO | WAITING | DONE
+
+* todo
+
+** client API
+
+three layers 
+
+We need this for .net initially, and Java at some later point
+
+*** DONE standard RMQ client API
+*** TODO reliable, available, asynchronous, point-to-point conversation API
+
+in turn comprised of three sub-layers
+
+**** TODO reliable connection/channel
+
+at-least-once delivery in the presence of
+- server and network failures
+- sender and recipient failures 
+
+- same api as normal connection/channel
+- channels keeps track of
+  - subscriptions
+  - tx mode or checkpoint mode
+  - qos prefetch
+  - publishes since last commit/cancel / checkpoint, or during last n ms
+    (depending on mode)
+- automatically reconnects in the event of errors that are not the
+  client/app's fault
+- on reconnect the channels are re-opened and for each channel
+  - the tx/checkpoint mode is (re)selected
+  - the qos prefetch is (re)set
+  - subscriptions are recreated
+  - buffered publishes are resent
+- callback to notify app when broker is deemed to have accepted
+  responsibilty for a message. By persisting this info apps can limit
+  the amount of resends they have to do in the event of a client
+  failure.
+- callbacks for connection and channel lifecycle events - invoked for
+  connect, reconnect, disconnect and retry-exceeded events
+
+props:
+- reconnect/resend policy
+  - retry_interval
+  - exponential_backoff_steps
+  - maximum retries
+  - buffer_duration (keep outbound messages for n ms, in case resend
+    is needed)
+
+The trouble with replaying commands is that we may stomp on resources
+that have been created/deleted by other connections.
+
+The other problem is that we do not know the state the system was in
+at the beginning of the recording.
+
+And, finally, some commands are not idempotent.
+
+-> decision: we only keep track of publishes. Synchronous commands
+fail in the event of a disconnect.
+
+async commands issued during a disconnect are silently dropped, except
+for publishes.
+Q: should publishes be totally async, even in the presence of
+  disconnects? Ideally yes, but there is a danger of buffering vast
+  volumes of messages during prolonged outages.
+
+**** TODO reliable, asynchronous, point-to-point conversation API
+
+- built on top of reliable connection/channel
+- each party has an identity, also serving as their "address"
+- parties can send messages to each other
+- receiving parties can identify the sender
+- messages get given unique ids
+- messages can be correlated to other messages
+- messages are persistent and all created broker entities are durable
+
+msg = {from,to,reply_to,message_id,correlation_id,body}
+
+methods:
+- constructor that takes a Connection and optional id prefix. This
+  forms the first part of ids created with next_id(). It should be
+  monotonically increasing *between runs*. The currrent time is prob
+  good enough for most apps, and that's the default. But apps may also
+  consider keeping a disk-based counter.
+- next_id() - apps can/should use this to populate the message_id
+  field. It is important that apps call 'send' with monotonically
+  increasing ids.
+- send(msg)
+- callback sent(msg) - invoked when broker has accepted
+  responsibility
+- callback received(msg) - invoked for inbound messages
+  -> void/exception;
+  - ack is sent if returns w/o exception. what do we do on exception?
+    tear down everything? perhaps we should do a basic.reject ... 
+  - single-threaded, i.e. only one invocation at a time
+
+props:
+- exchange="", queue=""
+- declare_exchange=false (w props durable=true, type=direct)
+- declare_queue=true (w props name=queue, durable=true,
+  exclusive=false, auto-delete=false, and bind it to exchange (unless
+  exchange=="") with bk=name)
+- commit/checkpoint every n msgs / ms, or wait n ms
+- 'sent', 'received' and 'lifecycle_event' callback handlers
+- message props = {delivery_mode=persistent}
+- prefetch_limit=0
+
+NB: internally we use *two* channels, one for publishes and one for
+deliveries/acks. This keeps the concurrency handling simpler and also
+means we can put the publish channel in tx/checkpoint mode w/o
+affecting the delivery channel.
+
+**** TODO HA version of the above
+
+Q: Do we need full HA or would standby (plus maybe SAN) be sufficient?
+
+creates queues on multiple nodes, subscribes to all of them, and acks
+& throws away all received messages sent by the same sender with an id
+less than or equal of an already received id. NB: the acking should
+only happen after the original message has been ack'ed.
+
+Q: how can we make this work reasonably efficient in a workload
+distribution scenario?
+
+PS: when there are multiple workers operating on a message stream,
+they send replies the message ids are only unique per worker. That
+means they need to identify themselves as a different *sender*, but
+set the reply-to to the common address.
+
+*** TODO algo collateral messaging API
+
+** protocol
+
+A -> B: msg(id)
+A <- : notification(id, stage)
+A <- : ...
+B -> A: msg(in-reply-to:id, id)
+B <- : notification(id, stage)
+B <- : ...
+
+NB: because delivery notifications are sent from multiple agents,
+  message order cannot be guaranteed
+
+*** TODO define collateral protocol
+i.e. the stuff that sits on top of the above
+
+*** TODO draw routing topology
+
+*** TODO draw logical message flow
+between C1, algo agent, C2
+
+*** TODO sequence diagrams
+
+*** TODO figure out messaging role of algo agent
+
+Is it a proxy, in which case it will pass on messages with their
+original from & message-id, or is it a full participant, in which case
+in order to get the notifications to work the way we want it will need
+to keep a mapping from message ids of the inbound messages to the
+message ids of the corresponding outbound messages, so that it can
+re-map the ids for notifications sent baxk by the recipient.
+
+Let's assume it is a proxy and experiment with that.
+
+** security
+
+*** TODO define attacker model
+
+*** TODO define threat model
+
+*** TODO investigate encryption options
+- is connection-level ssl enough?
+
+*** TODO investigate authentication options
+
+- base level: username & password, and SSL (possibly w h/w crypto)
+- client-side certs, and perhaps, two-, or three-factor auth
+  - threat: staff leaving client and knowing the rabbit credentials
+  - Paul: is this a client-side only thing?
+
+terminating SSL inside rabbit prevents external packet-level filtering
+
+also, cert management in rabbit may be harder than in an external
+termination point
+
+**** TODO How do we stop a client from impersonating one another
+by
+- sending messages under a different (but valid) username/password;
+  i.e. if they have managed to get hold of somebody else' creds
+- sending messages referencing agreements that do not belong to the
+  user they authenticated as?
+
+The only way to guard against that is for the algo agent to obtain a
+validated identity of the sender. We could try to get that from a
+client cert on the connection, but that requires rabbit to do the ssl
+termination, which is something we may want to avoid (see above).
+
+The alternative is to get clients to sign (portions of) the body. That
+requires the algo agent to maintain a list of trusted certs.
+
+*** TODO investigate authorisation options
+
+- permissions set such that users cannot create/delete anything, can
+  only publish to the appropriate exchanges, and can only consume from
+  the appropriate queues
+- queue names for clients are strong and clients are told of their
+  name at provisioning time. A queue with a new name can be created
+  should the the original name ever get compromised.
+- may need to use IP whitelisting
+
+** protection against DOS (accidental or deliberate)
+
+*** TODO define threat
+what can a user do
+- when having no credentials
+- when having full credentials
+
+*** TODO figure out how to identify misbehaving clients
+- at firewall
+- ordinary network monitoring
+- rmq stats
+
+*** TODO figure out how to cut off misbehaving clients
+- at firewall
+- by disabling their rmq account
+
+what kind of packet-level filtering should we consider?
+
+*** TODO RabbitMQ ulimits
+
+** detecting incorrect client behaviour
+
+*** AMQP level
+- check log for errors
+  - how do we tie this back to users?
+    - IP
+    - use rabbitmqctl connection info; but must be quick
+
+*** app level
+- Algo agent error log/reporting, for app-level errors
+  - perhaps just have another X to which errors are sent
+
+** algo agent
+
+** provisioning tool
+provisions the queue(s) for every client
+provisions record of all agreements
+
+** web i/f
+*** UI interactions
+*** UI design
+*** back-end
+*** f/e - b/e communication
+
+** testing
+
+** deployment
+
+** operational monitoring
+
+** billing
+
+** archiving
+
+** recovering from app-level failures
+manual intervention that needs to bring the state of the three
+parties back in sync
+
+** system upgrades
+
+** scaling
+
+*** TODO get some estimates of baseline, peak, growth
+1M msg per day + 3m notifications
+
+<20% of agreements generate a margin call on any given day
+
+biggest client: 20k, planned to rise to 100k
+avg: 1k, expected to rise
+500 clients
+
+msg size: ?
+
+** IM
+
+* possible rabbit extensions
+
+** MSBuild
+
+for .net client, since nant scares Windows people.
+
+Apparently msbuild can work under mono too.
+
+It is useful to have an msbuild, rather than just the dll in the GAC,
+because it allows source-level debugging in VS.
+
+** DL{Q,E}
+
+For messages that get redelivered too often. See spec of basic.deliver
+for some hints. The limit & dlq name would be configured on a
+per-queue basis by specifying a property at queue creation time.
+
+The redelivery counter will need to be persistent.
+
+NB: the advantage of DLQs over re-publishing the message to a
+different exchange is that all the meta information can be preserved
+in the former case whereas we'd have to create a wrapper otherwise.
+
+OTOH, DLEs would be far more flexible...
+...and we already have invented a mechanism for preserving the meta
+information - namely the exchange name - for alternate exchanges.
+
+So let's go with DLEs instead.
+
+** stats / accounting
+
+Record stats on usage of system
+
+- per user connection and channel counters
+- per connection frame and data volume counters (in & out)
+- per channel command counter (inbound and outbound)
+  - perhaps further broken down by command
+- per queue msg counter (in & out)
+
+channels and connections reference users, so aggregation by user is possible
+
+** ulimits
+
+- #conns per second (1st derivative of connection counter)
+- #concurrent connections
+- #channel creations per second (1st derivative of channel counter)
+- #concurrent channels
+- #commands per second (first derivative of command counter)
+  - perhaps further broken down by command (ditto)
+- amount of inbound data per second (first derivative of data volume counter)
+NB: we don't say anything about queues here. That's because queues,
+and the messages in them, aren't really owned by anybody.
+
+For the rate-based limits, we may want to allow bursts of activity.
+
+Since these are *u*limits, perhaps we should have a process per user
+to keep track of these.
+
+Should these limits be per cluster or per host?
+
+** end-to-end acks
+
+How can we get an ack all the way back to the publisher?
+
+We could get the consumer to publish an ack message, but that seems
+redundant when it is already sending and ack for the message. OTOH, an
+application level ack is not always aligned with the messaging level
+ack, so using the latter for the former is not always right.
+
+** SSL
+
+* possible rabbit bugs
+
+** WSAETIMEDOUT error in CreateConnection ([[bug:21201]])
+...when establishing lots of connections and running tight publish
+loops in them.
+[[http://www.tomshardware.com/forum/170046-46-wsaetimedout][Google says]] that this is probably due to the connection timing
+out. Apparently there are some registry settings and possible params
+to tweak...though it turns out that registry setting has been
+removed. "using an asynchronous client socket" (google for it) may
+help, though I suspect all that's going to happen is that the error
+gets reported asynchronously.
+
+** exception indicating missing inbound heartbeat in .net client ([[bug:21203]])
+This happens when the client is sending a lot of messages. One reason
+this may happen is if the mainloop doesn't get enough cycles.
+I tried increasing the Mainloop thread priority, but that didn't make
+a difference.
+Running the same test on a faster machine (quad core, rather than a VM
+on some old dual core), made the problem go awway :(
+
+** when rabbit is very busy, rabbitmqctl can time out ([[bug:21202]])
+with a {badrpc,timeout}
+
+
+* resolved
+
+** persistent vs non-persistent
+
+With persistence we can shorten the duration for which a producer
+needs to hang on to a message for GD - rather than having to wait
+until the ultimate consumer confirms receipt, the producer just needs
+to ensure it waits long enough for the message to get written to disk
+by the broker.
+
+** one user vs several
+
+several, since it makes it easier to disable access. Also, if we only
+had one username/password then if that gets compromised, potentially
+allowing anybody to access the system, we'd have to ask all clients to
+change their creds. Plus if we ever do add some more stats/accounting
+functionality to rabbit then keying some of it on the user makes sense.
+
+** number of queues per logical client
+
+one - at the messaging level there is no distinction between requests,
+replies and notifications.
+
