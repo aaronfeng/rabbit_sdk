@@ -8,7 +8,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     using RabbitMQ.Client;
     using Subscription = RabbitMQ.Client.MessagePatterns.Subscription;
-
+    using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
     public delegate void MessageEventHandler(object sender, IMessage m);
 
     public interface IMessage {
@@ -25,10 +25,12 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         IMessage CreateReply();
     }
 
+    public interface IReceivedMessage : IMessage {
+    }
+
     public interface IMessaging {
 
         event MessageEventHandler Sent;
-        event MessageEventHandler Received;
 
         Address Identity      { get; set; }
         Name    ExchangeName  { get; set; }
@@ -43,8 +45,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         void Init(IConnection conn);
         void Init(IConnection conn, long msgIdPrefix);
-        MessageId NextId();
-        void Send(IMessage m);
+
+        MessageId        NextId();
+        void             Send(IMessage m);
+        IReceivedMessage Receive();
+        void             Ack(IReceivedMessage m);
     }
 
     public class Message : IMessage {
@@ -110,6 +115,24 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
             return m;
         }
+
+    }
+
+    public class ReceivedMessage : Message, IReceivedMessage {
+
+        protected BasicDeliverEventArgs m_delivery;
+
+        public BasicDeliverEventArgs Delivery {
+            get { return m_delivery; }
+        }
+
+        public ReceivedMessage(BasicDeliverEventArgs delivery) :
+            base(delivery.BasicProperties,
+                 delivery.Body,
+                 delivery.RoutingKey) {
+            m_delivery = delivery;
+        }
+
     }
 
     public class Messaging : IMessaging, IDisposable {
@@ -130,7 +153,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected long m_msgIdSuffix;
 
         public event MessageEventHandler Sent;
-        public event MessageEventHandler Received;
 
         public Address Identity      {
             get { return m_identity; }
@@ -195,14 +217,23 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                                      ExchangeName, ExchangeType, Identity));
         }
 
-        public MessageId NextId() {
+        public MessageId        NextId() {
             return System.String.Format("{0:x8}{1:x8}",
                                         m_msgIdPrefix, m_msgIdSuffix++);
         }
 
-        public void Send(IMessage m) {
+        public void             Send(IMessage m) {
             SendingChannel.BasicPublish(ExchangeName, m.RoutingKey,
                                         m.Properties, m.Body);
+        }
+
+        public IReceivedMessage Receive() {
+            BasicDeliverEventArgs e = Subscription.Next();
+            return (e == null) ? null : new ReceivedMessage(e);
+        }
+
+        public void             Ack(IReceivedMessage m) {
+            Subscription.Ack(((ReceivedMessage)m).Delivery);
         }
 
         public void Close() {
@@ -238,11 +269,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 m1.MessageId  = foo.NextId();
                 foo.Send(m1);
                 //receive message at bar
-                RabbitMQ.Client.Events.BasicDeliverEventArgs r1 =
-                    bar.Subscription.Next();
+                IReceivedMessage r1 = bar.Receive();
                 System.Console.WriteLine(System.Text.Encoding.UTF8.
                                          GetString(r1.Body));
-                bar.Subscription.Ack(r1);
+                bar.Ack(r1);
             }
 
             return 0;
