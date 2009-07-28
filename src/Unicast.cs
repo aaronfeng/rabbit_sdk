@@ -28,7 +28,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     public interface IReceivedMessage : IMessage {
     }
 
-    public interface IMessaging {
+    public interface IMessaging : IDisposable {
 
         event MessageEventHandler Sent;
 
@@ -135,7 +135,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class Messaging : IMessaging, IDisposable {
+    public class Messaging : IMessaging {
         //TODO: implement IDisposable
 
         protected Address m_identity;
@@ -238,6 +238,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public void Close() {
+            //FIXME: only do this if we are fully initialised
             Subscription.Close();
             SendingChannel.Abort();
             ReceivingChannel.Abort();
@@ -254,12 +255,17 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public static int Main(string[] args) {
             using (IConnection conn = new ConnectionFactory().
                    CreateConnection("localhost")) {
+                TestDirect(conn);
+            }
 
+            return 0;
+        }
+
+        protected static void TestDirect(IConnection conn) {
+            using (IMessaging foo = new Messaging(), bar = new Messaging()) {
                 //create two parties
-                IMessaging foo = new Messaging();
                 foo.Identity = "foo";
                 foo.Init(conn);
-                IMessaging bar = new Messaging();
                 bar.Identity = "bar";
                 bar.Init(conn);
 
@@ -286,8 +292,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 System.Console.WriteLine(Decode(r2.Body));
                 foo.Ack(r2);
             }
-
-            return 0;
         }
 
         protected static byte[] Encode(string s) {
