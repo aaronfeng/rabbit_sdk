@@ -93,12 +93,11 @@ methods:
   monotonically increasing *between runs*. The currrent time is prob
   good enough for most apps, and that's the default. But apps may also
   consider keeping a disk-based counter.
-- create_subscription() -> subscription. Protected method that is
-  called after the channels have been created. The default
-  implementation creates a subscription which declares a queue w props
-  name=queue, durable=false, exclusive=false, auto-delete=false, and
-  binds it to the exchange (unless exchange=="") with bk=identity. The
-  method can (and should) be overridden for different behaviours. 
+- create_subscription delegate that is called after the channels have
+  been created. The default implementation creates a subscription
+  which declares a queue w props name=queue, durable=false,
+  exclusive=false, auto-delete=false, and binds it to the exchange
+  (unless exchange=="") with bk=identity.
 - next_id() - apps can/should use this to populate the message_id
   field. It is important that apps call 'send' with monotonically
   increasing ids.

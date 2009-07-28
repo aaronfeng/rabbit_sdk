@@ -28,6 +28,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     public interface IReceivedMessage : IMessage {
     }
 
+    public delegate Subscription CreateSubscriptionDelegate(IMessaging m);
+
     public interface IMessaging : IDisposable {
 
         event MessageEventHandler Sent;
@@ -37,6 +39,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         string  ExchangeType  { get; set; }
         Name    QueueName     { get; set; }
         ushort  PrefetchLimit { get; set; }
+
+        CreateSubscriptionDelegate CreateSubscription { get; set; }
 
         IConnection  Connection       { get; }
         IModel       SendingChannel   { get; }
@@ -144,6 +148,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected Name    m_queueName     = "";
         protected ushort  m_prefetchLimit = 0;
 
+        protected CreateSubscriptionDelegate m_createSubscription =
+            new CreateSubscriptionDelegate(DefaultCreateSubscription);
+
         protected IConnection  m_connection;
         protected IModel       m_sendingChannel;
         protected IModel       m_receivingChannel;
@@ -175,6 +182,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             set { m_prefetchLimit = value; }
         }
 
+        public CreateSubscriptionDelegate CreateSubscription {
+            get { return m_createSubscription; }
+            set { m_createSubscription = value; }
+        }
+
         public IConnection  Connection       {
             get { return m_connection; }
         }
@@ -201,7 +213,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_msgIdSuffix = 0;
 
             CreateAndConfigureChannels();
-            m_subscription = CreateSubscription();
+            m_subscription = CreateSubscription(this);
         }
 
         protected void CreateAndConfigureChannels() {
@@ -210,11 +222,12 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_receivingChannel.BasicQos(0, PrefetchLimit, false);
         }
 
-        protected Subscription CreateSubscription() {
-            return ("".Equals(ExchangeName) ?
-                    new Subscription(ReceivingChannel, QueueName, false) :
-                    new Subscription(ReceivingChannel, QueueName, false,
-                                     ExchangeName, ExchangeType, Identity));
+        protected static Subscription DefaultCreateSubscription(IMessaging m) {
+            return ("".Equals(m.ExchangeName) ?
+                    new Subscription(m.ReceivingChannel, m.QueueName, false) :
+                    new Subscription(m.ReceivingChannel, m.QueueName, false,
+                                     m.ExchangeName, m.ExchangeType,
+                                     m.Identity));
         }
 
         public MessageId        NextId() {
@@ -256,6 +269,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             using (IConnection conn = new ConnectionFactory().
                    CreateConnection("localhost")) {
                 TestDirect(conn);
+                TestRelayed(conn);
             }
 
             return 0;
@@ -270,28 +284,102 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 bar.Init(conn);
 
                 //send message from foo to bar
-                IMessage m1 = new Message();
-                m1.Properties = foo.SendingChannel.CreateBasicProperties();
-                m1.Body       = Encode("message1");
-                m1.From       = foo.Identity;
-                m1.To         = "bar";
-                m1.MessageId  = foo.NextId();
-                foo.Send(m1);
+                IMessage mf = new Message();
+                mf.Properties = foo.SendingChannel.CreateBasicProperties();
+                mf.Body       = Encode("message1");
+                mf.From       = foo.Identity;
+                mf.To         = "bar";
+                mf.MessageId  = foo.NextId();
+                foo.Send(mf);
 
                 //receive message at bar and reply
-                IReceivedMessage r1 = bar.Receive();
-                System.Console.WriteLine(Decode(r1.Body));
-                IMessage m2 = r1.CreateReply();
-                m2.Body      = Encode("message2");
-                m2.MessageId = bar.NextId();
-                bar.Send(m2);
-                bar.Ack(r1);
+                IReceivedMessage rb = bar.Receive();
+                System.Console.WriteLine(Decode(rb.Body));
+                IMessage mb = rb.CreateReply();
+                mb.Body      = Encode("message2");
+                mb.MessageId = bar.NextId();
+                bar.Send(mb);
+                bar.Ack(rb);
 
                 //receive reply at foo
-                IReceivedMessage r2 = foo.Receive();
-                System.Console.WriteLine(Decode(r2.Body));
-                foo.Ack(r2);
+                IReceivedMessage rf = foo.Receive();
+                System.Console.WriteLine(Decode(rf.Body));
+                foo.Ack(rf);
             }
+        }
+
+        protected static void TestRelayed(IConnection conn) {
+            using (IMessaging
+                   relay = new Messaging(),
+                   foo = new Messaging(),
+                   bar = new Messaging()) {
+
+                //create relay
+                relay.Identity = "relay";
+                relay.ExchangeName = "private";
+                relay.ExchangeType = "direct";
+                relay.CreateSubscription = delegate(IMessaging m) {
+                    return new Subscription(m.ReceivingChannel,
+                                            m.QueueName, false,
+                                            "public", "fanout", "");
+                };
+                relay.Init(conn);
+
+                //create two parties
+                CreateSubscriptionDelegate d = delegate(IMessaging m) {
+                    return new Subscription(m.ReceivingChannel,
+                                            m.QueueName, false,
+                                            "private", "direct", m.Identity);
+                };
+                foo.Identity = "foo";
+                foo.CreateSubscription = d;
+                foo.ExchangeName = "public";
+                foo.ExchangeType = "fanout";
+                foo.Init(conn);
+                bar.Identity = "bar";
+                bar.CreateSubscription = d;
+                bar.ExchangeName = "public";
+                bar.ExchangeType = "fanout";
+                bar.Init(conn);
+
+                //send message from foo to bar
+                IMessage mf = new Message();
+                mf.Properties = foo.SendingChannel.CreateBasicProperties();
+                mf.Body       = Encode("message1");
+                mf.From       = foo.Identity;
+                mf.To         = "bar";
+                mf.MessageId  = foo.NextId();
+                foo.Send(mf);
+
+                //receive message at relay and pass it on
+                //TODO: this should happen in the background, in a
+                //separate thread
+                IReceivedMessage r1 = relay.Receive();
+                relay.Send(r1);
+                relay.Ack(r1);
+
+                //receive message at bar and reply
+                IReceivedMessage rb = bar.Receive();
+                System.Console.WriteLine(Decode(rb.Body));
+                IMessage mb = rb.CreateReply();
+                mb.Body      = Encode("message2");
+                mb.MessageId = bar.NextId();
+                bar.Send(mb);
+                bar.Ack(rb);
+
+                //receive message at relay and pass it on
+                //TODO: this should happen in the background, in a
+                //separate thread
+                IReceivedMessage r2 = relay.Receive();
+                relay.Send(r2);
+                relay.Ack(r2);
+
+                //receive reply at foo
+                IReceivedMessage rf = foo.Receive();
+                System.Console.WriteLine(Decode(rf.Body));
+                foo.Ack(rf);
+            }
+
         }
 
         protected static byte[] Encode(string s) {
