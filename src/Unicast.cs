@@ -205,4 +205,37 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
+    public class Test {
+
+        public static int Main(string[] args) {
+            using (IConnection conn = new ConnectionFactory().
+                   CreateConnection("localhost")) {
+                //create two parties
+                IMessaging foo = new Messaging();
+                foo.Identity = "foo";
+                foo.Init(conn);
+                IMessaging bar = new Messaging();
+                bar.Identity = "bar";
+                bar.Init(conn);
+                //send message from foo to bar
+                IMessage m1 = new Message();
+                m1.Properties = foo.SendingChannel.CreateBasicProperties();
+                m1.Body       = System.Text.Encoding.UTF8.GetBytes("message1");
+                m1.From       = foo.Identity;
+                m1.To         = "bar";
+                m1.MessageId  = foo.NextId();
+                foo.Send(m1);
+                //receive message at bar
+                RabbitMQ.Client.Events.BasicDeliverEventArgs r1 =
+                    bar.Subscription.Next();
+                System.Console.WriteLine(System.Text.Encoding.UTF8.
+                                         GetString(r1.Body));
+                bar.Subscription.Ack(r1);
+            }
+
+            return 0;
+        }
+
+    }
+
 }
