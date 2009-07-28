@@ -103,7 +103,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public IMessage CreateReply() {
             //FIXME: this should clone Properties, once we have made
-            //IBasicProperties and ICloneable - see bug 21271
+            //IBasicProperties an ICloneable - see bug 21271
             IMessage m = new Message(Properties, Body, RoutingKey);
 
             Address origFrom = From; //TODO: drop once we clone
@@ -225,6 +225,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public void             Send(IMessage m) {
             SendingChannel.BasicPublish(ExchangeName, m.RoutingKey,
                                         m.Properties, m.Body);
+            //TODO: fire Sent event
         }
 
         public IReceivedMessage Receive() {
@@ -253,6 +254,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public static int Main(string[] args) {
             using (IConnection conn = new ConnectionFactory().
                    CreateConnection("localhost")) {
+
                 //create two parties
                 IMessaging foo = new Messaging();
                 foo.Identity = "foo";
@@ -260,22 +262,40 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 IMessaging bar = new Messaging();
                 bar.Identity = "bar";
                 bar.Init(conn);
+
                 //send message from foo to bar
                 IMessage m1 = new Message();
                 m1.Properties = foo.SendingChannel.CreateBasicProperties();
-                m1.Body       = System.Text.Encoding.UTF8.GetBytes("message1");
+                m1.Body       = Encode("message1");
                 m1.From       = foo.Identity;
                 m1.To         = "bar";
                 m1.MessageId  = foo.NextId();
                 foo.Send(m1);
-                //receive message at bar
+
+                //receive message at bar and reply
                 IReceivedMessage r1 = bar.Receive();
-                System.Console.WriteLine(System.Text.Encoding.UTF8.
-                                         GetString(r1.Body));
+                System.Console.WriteLine(Decode(r1.Body));
+                IMessage m2 = r1.CreateReply();
+                m2.Body      = Encode("message2");
+                m2.MessageId = bar.NextId();
+                bar.Send(m2);
                 bar.Ack(r1);
+
+                //receive reply at foo
+                IReceivedMessage r2 = foo.Receive();
+                System.Console.WriteLine(Decode(r2.Body));
+                foo.Ack(r2);
             }
 
             return 0;
+        }
+
+        protected static byte[] Encode(string s) {
+            return System.Text.Encoding.UTF8.GetBytes(s);
+        }
+
+        protected static string Decode(byte[] b) {
+            return System.Text.Encoding.UTF8.GetString(b);
         }
 
     }
