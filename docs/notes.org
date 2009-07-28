@@ -298,7 +298,9 @@ msg size: ?
 
 * possible rabbit extensions
 
-** MSBuild
+** make IBasicProperties cloneable ([[bug:21271]])
+
+** MSBuild ([[bug:21220]])
 
 for .net client, since nant scares Windows people.
 
