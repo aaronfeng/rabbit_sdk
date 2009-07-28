@@ -11,7 +11,16 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     public interface IMessage {
         IBasicProperties Properties { get; set; }
-        byte[] Body { get; set; }
+        byte[]           Body       { get; set; }
+        string           RoutingKey { get; set; }
+
+        Address From            { get; set; }
+        Address To              { get; set; }
+        Address ReplyTo         { get; set; }
+        MessageId MessageId     { get; set; }
+        MessageId CorrelationId { get; set; }
+
+        IMessage CreateReply();
     }
 
     public interface IMessaging {
@@ -23,7 +32,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         Address Identity      { get; set; }
         Name    ExchangeName  { get; set; }
         Name    QueueName     { get; set; }
-        int     PrefetchLimit { get; set; }
+        ushort  PrefetchLimit { get; set; }
 
         IConnection Connection       { get; }
         IModel      SendingChannel   { get; }
@@ -36,11 +45,12 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     }
 
     public class Messaging : IMessaging {
+        //TODO: implement IDisposable
 
         protected Address m_identity;
         protected Name    m_exchangeName  = "";
         protected Name    m_queueName     = "";
-        protected int     m_prefetchLimit = 0;
+        protected ushort  m_prefetchLimit = 0;
 
         protected IConnection m_connection;
         protected IModel      m_sendingChannel;
@@ -62,10 +72,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             set { m_exchangeName = value; }
         }
         public Name    QueueName     {
-            get { return m_queueName; }
+            get { return ("".Equals(m_queueName) ? Identity : m_queueName); }
             set { m_queueName = value; }
         }
-        public int     PrefetchLimit {
+        public ushort  PrefetchLimit {
             get { return m_prefetchLimit; }
             set { m_prefetchLimit = value; }
         }
@@ -90,11 +100,32 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_connection = conn;
             m_msgIdPrefix = msgIdPrefix;
             m_msgIdSuffix = 0;
-            // TODO
-            // 1) create channels
-            // 2) raise init event, if there is a handler, otherwise
-            // perform queue creation & binding
-            // 3) create subscription
+
+            CreateAndConfigureChannels();
+            SetupRouting();
+            CreateSubscription();
+        }
+
+        protected void CreateAndConfigureChannels() {
+            m_sendingChannel   = m_connection.CreateModel();
+            m_receivingChannel = m_connection.CreateModel();
+            m_receivingChannel.BasicQos(0, PrefetchLimit, false);
+        }
+
+        protected void SetupRouting() {
+            if (Initialised != null) {
+                Initialised(this, null);
+            } else {
+                ReceivingChannel.QueueDeclare(QueueName, true);
+                if (!"".Equals(ExchangeName)) {
+                    ReceivingChannel.QueueBind(QueueName, ExchangeName,
+                                               QueueName, false, null);
+                }
+            }
+        }
+
+        protected void CreateSubscription() {
+            //TODO: implement
         }
 
         public MessageId NextId() {
@@ -103,7 +134,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public void Send(IMessage m) {
-            //TODO: implement
+            SendingChannel.BasicPublish(ExchangeName, m.RoutingKey,
+                                        m.Properties, m.Body);
         }
 
     }
