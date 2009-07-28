@@ -5,8 +5,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     using Name      = System.String;
 
     using RabbitMQ.Client;
+    using Subscription = RabbitMQ.Client.MessagePatterns.Subscription;
 
-    public delegate void InitEventHandler(object sender, object dummy);
     public delegate void MessageEventHandler(object sender, IMessage m);
 
     public interface IMessage {
@@ -25,18 +25,19 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     public interface IMessaging {
 
-        event InitEventHandler    Initialised;
         event MessageEventHandler Sent;
         event MessageEventHandler Received;
 
         Address Identity      { get; set; }
         Name    ExchangeName  { get; set; }
+        string  ExchangeType  { get; set; }
         Name    QueueName     { get; set; }
         ushort  PrefetchLimit { get; set; }
 
-        IConnection Connection       { get; }
-        IModel      SendingChannel   { get; }
-        IModel      ReceivingChannel { get; }
+        IConnection  Connection       { get; }
+        IModel       SendingChannel   { get; }
+        IModel       ReceivingChannel { get; }
+        Subscription Subscription     { get; }
 
         void Init(IConnection conn);
         void Init(IConnection conn, long msgIdPrefix);
@@ -49,17 +50,18 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         protected Address m_identity;
         protected Name    m_exchangeName  = "";
+        protected string  m_exchangeType  = "direct";
         protected Name    m_queueName     = "";
         protected ushort  m_prefetchLimit = 0;
 
-        protected IConnection m_connection;
-        protected IModel      m_sendingChannel;
-        protected IModel      m_receivingChannel;
+        protected IConnection  m_connection;
+        protected IModel       m_sendingChannel;
+        protected IModel       m_receivingChannel;
+        protected Subscription m_subscription;
 
         protected long m_msgIdPrefix;
         protected long m_msgIdSuffix;
 
-        public event InitEventHandler    Initialised;
         public event MessageEventHandler Sent;
         public event MessageEventHandler Received;
 
@@ -71,6 +73,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             get { return m_exchangeName; }
             set { m_exchangeName = value; }
         }
+        public string  ExchangeType  {
+            get { return m_exchangeType; }
+            set { m_exchangeType = value; }
+        }
         public Name    QueueName     {
             get { return ("".Equals(m_queueName) ? Identity : m_queueName); }
             set { m_queueName = value; }
@@ -80,14 +86,18 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             set { m_prefetchLimit = value; }
         }
 
-        public IConnection Connection       {
+        public IConnection  Connection       {
             get { return m_connection; }
         }
-        public IModel      SendingChannel   {
+        public IModel       SendingChannel   {
             get { return m_sendingChannel; }
         }
-        public IModel      ReceivingChannel {
+        public IModel       ReceivingChannel {
             get { return m_receivingChannel; }
+        }
+
+        public Subscription Subscription     {
+            get { return m_subscription; }
         }
 
         public Messaging() {}
@@ -102,8 +112,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_msgIdSuffix = 0;
 
             CreateAndConfigureChannels();
-            SetupRouting();
-            CreateSubscription();
+            m_subscription = CreateSubscription();
         }
 
         protected void CreateAndConfigureChannels() {
@@ -112,20 +121,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_receivingChannel.BasicQos(0, PrefetchLimit, false);
         }
 
-        protected void SetupRouting() {
-            if (Initialised != null) {
-                Initialised(this, null);
-            } else {
-                ReceivingChannel.QueueDeclare(QueueName, true);
-                if (!"".Equals(ExchangeName)) {
-                    ReceivingChannel.QueueBind(QueueName, ExchangeName,
-                                               QueueName, false, null);
-                }
-            }
-        }
-
-        protected void CreateSubscription() {
-            //TODO: implement
+        protected Subscription CreateSubscription() {
+            return ("".Equals(ExchangeName) ?
+                    new Subscription(ReceivingChannel, QueueName, false) :
+                    new Subscription(ReceivingChannel, QueueName, false,
+                                     ExchangeName, ExchangeType, Identity));
         }
 
         public MessageId NextId() {

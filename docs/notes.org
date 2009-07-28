@@ -97,12 +97,12 @@ methods:
   field. It is important that apps call 'send' with monotonically
   increasing ids.
 - send(msg)
-- callback initialised(void) - invoked when channels have been
-  created; can be used to override default exchange/queue declaration
-  logic. When no callback is present, the default behaviour is to
-  declare a queue w props name=queue, durable=true, exclusive=false,
-  auto-delete=false, and bind it to exchange (unless exchange=="")
-  with bk=name. No exchange is declared by default.
+- create_subscription() -> subscription. Protected method that is
+  called after the channels have been created. The default
+  implementation creates a subscription which declares a queue w props
+  name=queue, durable=false, exclusive=false, auto-delete=false, and
+  binds it to the exchange (unless exchange=="") with bk=identity. The
+  method can (and should) be overridden for different behaviours. 
 - callback sent(msg) - invoked when broker has accepted
   responsibility
 - callback received(msg) - invoked for inbound messages
@@ -112,7 +112,7 @@ methods:
   - single-threaded, i.e. only one invocation at a time
 
 props:
-- identity, exchange="", queue=identity
+- identity, exchange="", exchange_type="direct", queue=identity
 - prefetch_limit=0
 - readonly connection, sending_channel, receiving_channel
 - commit/checkpoint every n msgs / ms, or wait n ms
