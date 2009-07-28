@@ -45,6 +45,71 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         void Send(IMessage m);
     }
 
+    public class Message : IMessage {
+
+        protected IBasicProperties m_properties;
+        protected byte[]           m_body;
+        protected string           m_routingKey;
+
+        public IBasicProperties Properties {
+            get { return m_properties; }
+            set { m_properties = value; }
+        }
+        public byte[]           Body       {
+            get { return m_body; }
+            set { m_body = value; }
+        }
+        public string           RoutingKey {
+            get { return m_routingKey; }
+            set { m_routingKey = value; }
+        }
+
+        public Address From            {
+            get { return Properties.UserId; }
+            set { Properties.UserId = value; }
+        }
+        public Address To              {
+            get { return RoutingKey; }
+            set { RoutingKey = value; }
+        }
+        public Address ReplyTo         {
+            get { return Properties.ReplyTo; }
+            set { Properties.ReplyTo = value; }
+        }
+        public MessageId MessageId     {
+            get { return Properties.MessageId; }
+            set { Properties.MessageId = value; }
+        }
+        public MessageId CorrelationId {
+            get { return Properties.CorrelationId; }
+            set { Properties.CorrelationId = value; }
+        }
+
+        public Message() {
+        }
+
+        public Message(IBasicProperties props, byte[] body, string rk) {
+            m_properties = props;
+            m_body       = body;
+            m_routingKey = rk;
+        }
+
+        public IMessage CreateReply() {
+            //FIXME: this should clone Properties, once we have made
+            //IBasicProperties and ICloneable - see bug 21271
+            IMessage m = new Message(Properties, Body, RoutingKey);
+
+            Address origFrom = From; //TODO: drop once we clone
+            m.From = To;
+            m.To = ReplyTo == null ? origFrom : ReplyTo;
+            m.Properties.ClearReplyTo();
+            m.CorrelationId = MessageId;
+            m.Properties.ClearMessageId();
+
+            return m;
+        }
+    }
+
     public class Messaging : IMessaging {
         //TODO: implement IDisposable
 
