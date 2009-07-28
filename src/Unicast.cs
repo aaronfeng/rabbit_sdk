@@ -1,3 +1,5 @@
+using System;
+
 namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     using Address   = System.String;
@@ -110,7 +112,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
     }
 
-    public class Messaging : IMessaging {
+    public class Messaging : IMessaging, IDisposable {
         //TODO: implement IDisposable
 
         protected Address m_identity;
@@ -201,6 +203,16 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public void Send(IMessage m) {
             SendingChannel.BasicPublish(ExchangeName, m.RoutingKey,
                                         m.Properties, m.Body);
+        }
+
+        public void Close() {
+            Subscription.Close();
+            SendingChannel.Abort();
+            ReceivingChannel.Abort();
+        }
+
+        void IDisposable.Dispose() {
+            Close();
         }
 
     }
