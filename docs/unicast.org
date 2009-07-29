@@ -50,6 +50,3 @@ affecting the delivery channel.
 ** TODO write some helpers for algo-like setup
 - suppression of any resource/binding creation; will probably require
   sub-classing of Subscription
-** TODO implement responsibility transfer control
-i.e. commit/checkpoint every n msgs / ms, or wait n ms, invoke 'sent'
-callback

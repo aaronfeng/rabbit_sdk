@@ -9,7 +9,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     using RabbitMQ.Client;
     using Subscription = RabbitMQ.Client.MessagePatterns.Subscription;
     using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
-    public delegate void MessageEventHandler(object sender, IMessage m);
+
+    public delegate void MessageEventHandler(IMessaging sender, IMessage m);
 
     public interface IMessage {
         IBasicProperties Properties { get; set; }
@@ -238,7 +239,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public void             Send(IMessage m) {
             SendingChannel.BasicPublish(ExchangeName, m.RoutingKey,
                                         m.Properties, m.Body);
-            //TODO: fire Sent event
+            //TODO: if/when SendingChannel supports 'sent'
+            //notifications then we will translate those, rather than
+            //firing our own here
+            if (Sent != null) Sent(this, m);
         }
 
         public IReceivedMessage Receive() {
@@ -275,12 +279,18 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             return 0;
         }
 
+        protected static void Sent(IMessaging sender, IMessage m) {
+                LogMessage("sent", sender, m);
+        }
+
         protected static void TestDirect(IConnection conn) {
             using (IMessaging foo = new Messaging(), bar = new Messaging()) {
                 //create two parties
                 foo.Identity = "foo";
+                foo.Sent += Sent;
                 foo.Init(conn);
                 bar.Identity = "bar";
+                bar.Sent += Sent;
                 bar.Init(conn);
 
                 //send message from foo to bar
@@ -294,7 +304,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
                 //receive message at bar and reply
                 IReceivedMessage rb = bar.Receive();
-                System.Console.WriteLine(Decode(rb.Body));
+                LogMessage("recv", bar, rb);
                 IMessage mb = rb.CreateReply();
                 mb.Body      = Encode("message2");
                 mb.MessageId = bar.NextId();
@@ -303,10 +313,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
                 //receive reply at foo
                 IReceivedMessage rf = foo.Receive();
-                System.Console.WriteLine(Decode(rf.Body));
+                LogMessage("recv", foo, rf);
                 foo.Ack(rf);
             }
-        }
+}
 
         protected static void TestRelayed(IConnection conn) {
             using (IMessaging
@@ -348,11 +358,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 foo.CreateSubscription = d;
                 foo.ExchangeName = "public";
                 foo.ExchangeType = "fanout";
+                foo.Sent += Sent;
                 foo.Init(conn);
                 bar.Identity = "bar";
                 bar.CreateSubscription = d;
                 bar.ExchangeName = "public";
                 bar.ExchangeType = "fanout";
+                bar.Sent += Sent;
                 bar.Init(conn);
 
                 //send message from foo to bar
@@ -366,7 +378,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
                 //receive message at bar and reply
                 IReceivedMessage rb = bar.Receive();
-                System.Console.WriteLine(Decode(rb.Body));
+                LogMessage("recv", bar, rb);
                 IMessage mb = rb.CreateReply();
                 mb.Body      = Encode("message2");
                 mb.MessageId = bar.NextId();
@@ -375,10 +387,17 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
                 //receive reply at foo
                 IReceivedMessage rf = foo.Receive();
-                System.Console.WriteLine(Decode(rf.Body));
+                LogMessage("recv", foo, rf);
                 foo.Ack(rf);
             }
 
+        }
+
+        protected static void LogMessage(string action,
+                                         IMessaging actor,
+                                         IMessage m) {
+            System.Console.WriteLine("{0} {1} {2}",
+                                     actor.Identity, action, Decode(m.Body));
         }
 
         protected static byte[] Encode(string s) {
