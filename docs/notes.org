@@ -326,7 +326,7 @@ redundant when it is already sending and ack for the message. OTOH, an
 application level ack is not always aligned with the messaging level
 ack, so using the latter for the former is not always right.
 
-** SSL
+** SSL ([[bug:19356]])
 
 * possible rabbit bugs
 
