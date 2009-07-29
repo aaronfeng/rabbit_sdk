@@ -325,6 +325,19 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 };
                 relay.Init(conn);
 
+                //activate relay
+                new System.Threading.Thread
+                    (delegate() {
+                        //receive messages and pass it on
+                        IReceivedMessage r;
+                        while (true) {
+                            r = relay.Receive();
+                            if (r == null) return;
+                            relay.Send(r);
+                            relay.Ack(r);
+                        }
+                    }).Start();
+
                 //create two parties
                 CreateSubscriptionDelegate d = delegate(IMessaging m) {
                     return new Subscription(m.ReceivingChannel,
@@ -351,13 +364,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 mf.MessageId  = foo.NextId();
                 foo.Send(mf);
 
-                //receive message at relay and pass it on
-                //TODO: this should happen in the background, in a
-                //separate thread
-                IReceivedMessage r1 = relay.Receive();
-                relay.Send(r1);
-                relay.Ack(r1);
-
                 //receive message at bar and reply
                 IReceivedMessage rb = bar.Receive();
                 System.Console.WriteLine(Decode(rb.Body));
@@ -366,13 +372,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 mb.MessageId = bar.NextId();
                 bar.Send(mb);
                 bar.Ack(rb);
-
-                //receive message at relay and pass it on
-                //TODO: this should happen in the background, in a
-                //separate thread
-                IReceivedMessage r2 = relay.Receive();
-                relay.Send(r2);
-                relay.Ack(r2);
 
                 //receive reply at foo
                 IReceivedMessage rf = foo.Receive();
