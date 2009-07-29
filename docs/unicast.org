@@ -1,0 +1,53 @@
+* design
+- each party has an identity, also serving as their "address"
+- parties can send messages to each other
+- receiving parties can identify the sender
+- messages get given unique ids
+- messages can be correlated to other messages
+- all created broker entities are durable
+
+msg = {body, from, to, reply_to, message_id, correlation_id}
+
+methods:
+- init(connection, optional msg_id_prefix). The msg_id_prefix forms
+  the first part of ids created with next_id(). It should be
+  monotonically increasing *between runs*. The currrent time is prob
+  good enough for most apps, and that's the default. But apps may also
+  consider keeping a disk-based counter.
+- create_subscription delegate that is called after the channels have
+  been created. The default implementation creates a subscription
+  which declares a queue w props name=queue, durable=false,
+  exclusive=false, auto-delete=false, and binds it to the exchange
+  (unless exchange=="") with bk=identity.
+- next_id() - apps can/should use this to populate the message_id
+  field. It is important that apps call 'send' with monotonically
+  increasing ids.
+- send(msg)
+- receive() -> msg. Invoked to receive a message.
+- ack(msg). Called to ack a message.
+- callback sent(msg) - invoked when broker has accepted
+  responsibility
+
+props:
+- identity, exchange="", exchange_type="direct", queue=identity
+- prefetch_limit=0
+- readonly connection, sending_channel, receiving_channel
+- commit/checkpoint every n msgs / ms, or wait n ms
+- 'sent', and 'lifecycle_event' callback handlers
+
+NB: internally we use *two* channels, one for publishes and one for
+deliveries/acks. This keeps the concurrency handling simpler and also
+means we can put the publish channel in tx/checkpoint mode w/o
+affecting the delivery channel.
+
+* todo
+
+** TODO build automation
+** TODO API docs
+** TODO test and fix error handling
+** TODO split out tests and use nunit
+** TODO split out implementation - Unicast.cs should just be the API
+** TODO write some helpers for algo-like setup
+** TODO implement responsibility transfer control
+i.e. commit/checkpoint every n msgs / ms, or wait n ms, invoke 'sent'
+callback
