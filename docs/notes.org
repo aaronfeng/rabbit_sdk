@@ -136,14 +136,30 @@ Let's assume it is a proxy and experiment with that.
 
 ** security
 
-*** TODO define attacker model
+*** TODO [[http://www.enisa.europa.eu/rmra/er_use_by_example.html][Twelve Steps]]
 
-*** TODO define threat model
+**** Phase 1: Identification of security and privacy risks
+***** I 1: Set asset protection goals
+***** I 2: Define attacker model
+***** I 3: Search vulnerabilities
+***** I 4: Model threats
+**** Phase 2: Quantification of security and privacy risks
+***** Q 1: Estimate potential losses
+***** Q 2: Prioritize threats
+**** Phase 3: Controlling security and privacy risks
+***** C 1: Select protection mechanisms
+***** C 2: Implement protection mechanisms
+**** Phase 4: Monitoring security and privacy risks
+***** M 1: Review identified security and privacy risks
+***** M 2: Review quantified security and privacy risks
+***** M 3: Review impacts of implemented technical protection mechanisms
+***** M 4: Report results to stakeholders
 
-*** TODO investigate encryption options
+*** TODO specifics
+**** investigate encryption options
 - is connection-level ssl enough?
 
-*** TODO investigate authentication options
+**** investigate authentication options
 
 - base level: username & password, and SSL (possibly w h/w crypto)
 - client-side certs, and perhaps, two-, or three-factor auth
@@ -155,7 +171,7 @@ terminating SSL inside rabbit prevents external packet-level filtering
 also, cert management in rabbit may be harder than in an external
 termination point
 
-**** TODO How do we stop a client from impersonating one another
+***** TODO How do we stop a client from impersonating one another
 by
 - sending messages under a different (but valid) username/password;
   i.e. if they have managed to get hold of somebody else' creds
@@ -170,7 +186,7 @@ termination, which is something we may want to avoid (see above).
 The alternative is to get clients to sign (portions of) the body. That
 requires the algo agent to maintain a list of trusted certs.
 
-*** TODO investigate authorisation options
+**** investigate authorisation options
 
 - permissions set such that users cannot create/delete anything, can
   only publish to the appropriate exchanges, and can only consume from
