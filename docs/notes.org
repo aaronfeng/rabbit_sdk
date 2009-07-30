@@ -136,6 +136,59 @@ Let's assume it is a proxy and experiment with that.
 
 ** security
 
+*** some goals
+
+C1-C3, A (algo), O (outsider)
+
+say, C1 sends a message M to C2. Who can read the message?
+
+- C1
+- C2
+- not C3
+- not O
+- A
+  - needs to see it to do validation, value-add, etc
+  - but that means an O who can penetrate the algo system can
+    see M
+  -> try to keep O outside
+  -> do not *store* M unencrypted for long periods of time, to reduce
+    the amount of info O can glean
+
+C2 needs to be sure M came from C1.
+A is going to provide that guarantee, i.e. C2 doesn't need to verify
+C1 directly but just needs to trust A.
+A also needs to be sure M came from C1, e.g. for billing and legal
+reasons.
+
+use ssl client certs to authenticate clients. make it responsibility
+of customers to ensure their private keys are kept private.
+
+how do we stop C1 from successfully authenticating as C1, but then
+sending a message claiming to be from C2?
+-> get C1 to sign M
+
+same in other direction:
+- A has a server cert, C* know public key
+- A re-signs messages, so the C* know they came from Algo (NB: no need
+  to pass on original sig)
+
+how can C1 be sure that M
+- does not get sent to C2
+  - trust algo code and system integrity (to prevent tampering w code)
+  - algo client at C2 could reject M if it was not destined for
+    it. This is a layer that prevents *accidental* disclosure.
+- does get sent to C1
+  - trust notifications
+
+C*, A are not homogenous entities - they comprise various systems,
+locations, people, etc. That raises issues about who/what has access
+to what data/capabilities. From an A perspective, one area where that
+is of particular issue is support: how can support staff gain access
+to relevant data at a) server, b) at client. For the latter, client
+could log lots of stuff and pass it to A at the request of A and
+consent of C.
+
+
 *** TODO [[http://www.enisa.europa.eu/rmra/er_use_by_example.html][Twelve Steps]]
 
 **** Phase 1: Identification of security and privacy risks
@@ -215,6 +268,19 @@ what can a user do
 what kind of packet-level filtering should we consider?
 
 *** TODO RabbitMQ ulimits
+
+*** some possible countermeasures
+**** IP whitelisting as first line of defense
+**** SSL client certs, checked (efficiently) provide a second line
+**** what remains is rogue, authorized clients
+
+- rate limits at firewall
+- ulimits in rabbit
+- limits checked by relay
+- rate limits coded into client
+- shutdown command that a client would react to (this can just be the
+AMQP shutdown, and ultimately connection closure, but it needs to be  
+triggerable in the right way)
 
 ** detecting incorrect client behaviour
 
