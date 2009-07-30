@@ -1,14 +1,10 @@
-using System;
-
 namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
-    using Address   = System.String;
-    using MessageId = System.String;
-    using Name      = System.String;
+     using Address   = System.String;
+     using MessageId = System.String;
+     using Name      = System.String;
 
-    using RabbitMQ.Client;
-    using Subscription = RabbitMQ.Client.MessagePatterns.Subscription;
-    using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
+     using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
 
     public class Message : IMessage {
 
@@ -94,7 +90,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     }
 
     public class Messaging : IMessaging {
-        //TODO: implement IDisposable
 
         protected Address m_identity;
         protected Name    m_exchangeName  = "";
@@ -214,7 +209,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             ReceivingChannel.Abort();
         }
 
-        void IDisposable.Dispose() {
+        void System.IDisposable.Dispose() {
             Close();
         }
 

@@ -1,14 +1,8 @@
-using System;
-
 namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     using Address   = System.String;
     using MessageId = System.String;
     using Name      = System.String;
-
-    using RabbitMQ.Client;
-    using Subscription = RabbitMQ.Client.MessagePatterns.Subscription;
-    using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
 
     public delegate void MessageEventHandler(IMessaging sender, IMessage m);
 
@@ -31,7 +25,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     public delegate Subscription CreateSubscriptionDelegate(IMessaging m);
 
-    public interface IMessaging : IDisposable {
+    public interface IMessaging : System.IDisposable {
 
         event MessageEventHandler Sent;
 
