@@ -42,8 +42,6 @@ affecting the delivery channel.
 
 * todo
 
-** TODO build automation
 ** TODO API docs
 ** TODO test and fix error handling
-** TODO split out tests and use nunit
-** TODO split out implementation - Unicast.cs should just be the API
+** TODO use nunit
