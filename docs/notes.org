@@ -273,6 +273,8 @@ msg size: ?
 
 * possible rabbit extensions
 
+** allow suppression of queue declaration in Subscription ([[bug:21286]])
+
 ** make IBasicProperties cloneable ([[bug:21271]])
 
 ** MSBuild ([[bug:21220]])
