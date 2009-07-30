@@ -1,0 +1,80 @@
+<!-- NAnt build file. -*- nxml -*- -->
+<project name="RabbitMQ Unicast Pattern" default="build" basedir=".">
+
+  <property name="target.framework" value="mono-2.0" />
+  <property name="debug" value="true"/>
+  <property name="msbuild" value="xbuild"/>
+
+  <property name="build.dir" value="build"/>
+  <property name="target.dllname.base" value="RabbitMQ.Client.MessagePatterns.Unicast" />
+  <property name="target.dllname" value="${build.dir}/${target.dllname.base}.dll" />
+  <property name="unit-tests.dllname" value="${build.dir}/unit-tests.dll"/>
+  <property name="nunit.dllname" value="src/unit/nunit/nunit.framework.dll"/>
+  
+  <property name="nant.settings.currentframework" value="${target.framework}" />
+
+  <target name="clean" description="remove all generated files">
+    <delete dir="${build.dir}" failonerror="false" />
+  </target>
+
+  <target name="build" description="compiles the source code">
+    <mkdir dir="${build.dir}" />
+    <csc target="library"
+	 output="${target.dllname}"
+	 doc="${build.dir}/${target.dllname.base}.xml"
+	 debug="${debug}">
+      <sources>
+	<include name="src/Unicast.cs" />
+	<include name="src/UnicastImpl.cs" />
+      </sources>
+      <references>
+        <include name="lib/RabbitMQ.Client.dll" />
+      </references>
+      <nowarn>
+	<warning number="1591"/>
+      </nowarn>
+    </csc>
+  </target>
+
+  <target name="examples" description="compiles the examples"
+          depends="build">
+    <mkdir dir="${build.dir}" />
+    <csc target="exe"
+	 output="${build.dir}/UnicastTest.exe"
+	 debug="${debug}">
+      <sources>
+	<include name="src/UnicastTest.cs" />
+      </sources>
+      <references>
+        <include name="lib/RabbitMQ.Client.dll" />
+        <include name="build/RabbitMQ.Client.MessagePatterns.Unicast.dll" />
+      </references>
+    </csc>
+    <copy file="lib/RabbitMQ.Client.dll" todir="${build.dir}"/>
+  </target>
+
+<!--
+  <target name="build-unit" description="compile unit tests"
+	  depends="build">
+    <mkdir dir="${build.dir}" />
+    <csc target="library" output="${unit-tests.dllname}" debug="true">
+      <sources>
+	<include name="src/unit/*.cs" />
+      </sources>
+      <references>
+	<include name="${target.dllname}"/>
+	<include name="${nunit.dllname}"/>
+      </references>
+    </csc>
+    <copy file="${nunit.dllname}" todir="${build.dir}"/>
+  </target>
+
+  <target name="unit" description="run unit tests"
+	  depends="build-unit">
+    <exec program="src/unit/nunit/nunit-console.exe" useruntimeengine="true">
+      <arg value="${unit-tests.dllname}"/>
+    </exec>
+  </target>
+-->
+
+</project>
