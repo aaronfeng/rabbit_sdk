@@ -17,9 +17,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         byte[]           Body       { get; set; }
         string           RoutingKey { get; set; }
 
-        Address From            { get; set; }
-        Address To              { get; set; }
-        Address ReplyTo         { get; set; }
+        Address   From          { get; set; }
+        Address   To            { get; set; }
+        Address   ReplyTo       { get; set; }
         MessageId MessageId     { get; set; }
         MessageId CorrelationId { get; set; }
 
