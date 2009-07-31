@@ -1,0 +1,277 @@
+* [[http://www.enisa.europa.eu/rmra/er_use_by_example.html][Twelve Steps]]
+
+** Phase 1: Identification of security and privacy risks
+*** I 1: Set asset protection goals
+*** I 2: Define attacker model
+*** I 3: Search vulnerabilities
+*** I 4: Model threats
+** Phase 2: Quantification of security and privacy risks
+*** Q 1: Estimate potential losses
+*** Q 2: Prioritize threats
+** Phase 3: Controlling security and privacy risks
+*** C 1: Select protection mechanisms
+*** C 2: Implement protection mechanisms
+** Phase 4: Monitoring security and privacy risks
+*** M 1: Review identified security and privacy risks
+*** M 2: Review quantified security and privacy risks
+*** M 3: Review impacts of implemented technical protection mechanisms
+*** M 4: Report results to stakeholders
+
+
+* A start on the Twelve Steps
+
+** scenario
+
+Customer C1 sends a message M to customer C2 via the Algo system
+A. Other actors are customer C3 and outsider O.
+
+** asset protection goals
+
+*** message confidentiality
+
+Ideally only C1 and C2 should be able to see M - M relates to an
+agreement between them, they are the only parties to the agreement,
+and anybody else seeing M could gain value from that knowledge.
+
+But A needs to be able to see M too in order to perform validation and
+other value-added services. Therefore C1 and C2 need to know that A is
+not doing anything other with M than what it agreed to do.
+
+NB: by visibility we mean not just the payload but also the addressing
+information, i.e. the very fact that C1 has sent M to C2, since the
+latter on its own is of potential value to an attacker.
+
+*** message authenticity
+
+C2 needs to know that M came from C1, since an attacker could gain
+value from getting C2 to do something as a result of receiving an M
+that purports to be from C1 but actually isn't.
+
+A also needs to know that M came from C1, for billing and auditing
+purposes.
+
+*** message integrity
+
+C2 needs to know that M's content is genuine, i.e. hasn't been
+tampered with, since an attacker could gain value by altering M's
+content and thus C2's actions.
+
+A also needs to know that, for the same reason, i.e. it is making
+decisions based on M's content.
+
+*** message accountability
+
+This is very much like message authenticity, except here the objective
+is for C2 (and A) to be able to prove that C1 sent M thus making it
+impossible for C1 to deny that it sent M.
+
+*** TODO server asset confidentiality and integrity, and others
+
+We only looked at *messages* here; are there other assets that need
+protecting? Probably yes, in particular various pieces of info held at
+the server:
+- contract info
+- billing info
+- various system stats - these could be of value to an algo competitor
+  even if they contained no message details
+
+
+** attacker model
+
+*** outsider
+**** can tap the public IP network
+**** can inject IP packets in the public network
+**** can spoof IP addresses
+
+*** customer insider
+**** can do everything that outsider can
+**** can gain complete control of customer-side machine
+
+*** Algo insider
+**** can do everything that outsider can
+**** can gain complete control of algo systems
+
+
+** protection mechanisms
+
+*** IP address whitelisting
+
+This is a first line of defence, cheap to enforce at the firewall.
+
+*** SSL for all customer <-> algo comms
+
+This goes a long way to ensuring message confidentiality, and some way
+to ensuring the other goals.
+
+*** per-customer, strong RabbitMQ username/password
+
+The username/password should be treated by customers in the same way
+as the private key for their cert (see below), i.e. they must ensure
+it doesn't get disclosed / used without appropriate authorisation.
+
+*** restricted per-user permissions for RabbitMQ resources
+
+- permissions set such that users cannot create/delete anything, can
+  only publish to the appropriate exchanges, and can only consume from
+  the appropriate queues
+- queue names for clients are strong and clients are told of their
+  name at provisioning time. A queue with a new name can be created
+  should the the original name ever get compromised.
+
+*** server certs
+
+Cs trust A on the basis of the cert it supplies.
+
+*** client-side certs
+
+A authenticates Cs by their cert. This can happen at the firewall and
+hence be (relatively, as SSL goes) cheap. Also, terminating SSL inside
+rabbit would prevents external packet-level filtering.
+
+C1 signs M with C1's cert (this stops C1 from successfully
+authenticating as C1, but then sending a message claiming to be from
+C3). A, at the application level, verifies the signature is genuine
+and matches C1. It then re-signs the message before sending it to
+C2. C2 verifies the signature of and checks that it matches
+A. It *may*, also verify C1's original signature.
+
+That way
+- A asserts the authenticity, integrity and accountability of M.
+- A vouches for these guarantees to C2, i.e. C2 doesn't need to
+  (though it *can*) do any checks in relation to C1, just A.
+
+We may also want A to encrypt M for C2. That would ensure that if the
+rabbit credentials (username/password) of C2 get compromised, an
+attacker, while they could still *steal* the messages destined for C2,
+would not be able to read them.
+
+*** preventing key compromise
+
+It must be the responsibility of customers to ensure their private
+keys are kept private.
+
+Can consider h/w crypto, at client and at algo.
+
+At customer, consider two- or three-factor auth.
+
+*** no storage of unencrypted message data at algo
+at least not for longer than a message is "in motion"
+
+The idea is to limit the amount of information an attacker which has
+gained *some* access to the algo system can obtain.
+
+*** audit / certification / disclosure of algo code
+
+With the above setup, Cs must trust A that it will do exactly what it
+agreed to do, and nothing else. For example, Cs must be confident that
+A won't misroute, tamper with, drop or fake messages / senders.
+
+Some of that, namely tampering and faking, can be prevented *w/o* Cs
+having to trust A - by them verifying the original sigs of the
+sender. That however requires them to be in possession of the relevant
+certs.
+
+Ultimately though, some trust in A is necessary, and essentially that
+means trusting the algo code - both at their end and at the server -
+and the integrity of the algo systems and organisation.
+
+It is unclear what is required for customers to gain that level of
+trust, and this is likely to vary from customer to customer. But
+possible options are independent audits and certification of the algo
+code, or even disclosure of the algo code.
+
+*** filtering of mis-routed messages at client
+
+Since in many setups the code at the client end that interacts with
+the algo system will be algo code (i.e. the V4/5 algo software), we
+can limit the impact of accidental disclosure through mis-routing
+(e.g. as a result of a bug at the server end) by getting the client to
+filter out messages not destined for it.
+
+However, this only protects against a tiny number of bugs/attacks, so
+I don't think it's worth it.
+
+*** TODO think more about client and server compromise
+
+
+** misc
+
+*** actors vs people and systems
+
+C*, A are not homogeneous entities - they comprise various systems,
+locations, people, etc. That raises issues about who/what has access
+to what data/capabilities. From an A perspective, one area where that
+is of particular issue is support: how can support staff gain access
+to relevant data at a) server, b) at client. For the latter, client
+could log lots of stuff and pass it to A at the request of A and
+consent of C.
+
+*** cert management
+
+**** server cert
+
+- need to get a server cert, keep it safe and renew it as appropriate
+- need to communicate the server cert to customers so they can use it
+  for verification
+- need to repeat this process whenever server cert changes
+- for that, need a mechanism for smooth transition rather than sudden
+  cut-over
+
+**** client certs
+
+- should probably issue certs to clients rather than asking them to
+get them from some random CA. That way algo can ensure that the certs
+meet all the requirements (e.g. key strength, key usage, expiry)
+- need to configure firewall with the client certs
+- need to configure relay app with the certs (so it can check sigs)
+- need to communicate client cert to customer so they can use it for
+  authentication and signing.
+- need to communicate certs to *other* customers, if those customers
+  want to perform verification directly (rather than trusting
+  algo). NB: this may need to happen selectively - i.e. C2 should only
+  get the certs of C1 and other Cs it has agreements with, not any
+  other customers - depending on whether algo minds all their
+  customers knowing who all the other customers are (though an
+  alternative way of preventing that, since algo is in control of
+  issuing the certs, is to not include any identifying information in
+  the certs)
+- need to repeat this process whenever client cert changes
+- for that, need a mechanism for smooth transition rather than sudden
+  cut-over
+
+
+
+* protection against DOS (accidental or deliberate)
+
+(this should be folded into the above)
+
+** TODO define threat
+what can a user do
+- when having no credentials
+- when having full credentials
+
+** TODO figure out how to identify misbehaving clients
+- at firewall
+- ordinary network monitoring
+- rmq stats
+
+** TODO figure out how to cut off misbehaving clients
+- at firewall
+- by disabling their rmq account
+
+what kind of packet-level filtering should we consider?
+
+** TODO RabbitMQ ulimits
+** some possible countermeasures
+*** IP whitelisting as first line of defense
+*** SSL client certs, checked (efficiently) provide a second line
+*** what remains is rogue, authorized clients
+
+- rate limits at firewall
+- ulimits in rabbit
+- limits checked by relay
+- rate limits coded into client
+- shutdown command that a client would react to (this can just be the
+AMQP shutdown, and ultimately connection closure, but it needs to be  
+triggerable in the right way)
+
