@@ -159,15 +159,10 @@ provisions record of all agreements
 *** f/e - b/e communication
 
 ** testing
-
 ** deployment
-
 ** operational monitoring
-
 ** billing
-
 ** archiving
-
 ** recovering from app-level failures
 manual intervention that needs to bring the state of the three
 parties back in sync
@@ -185,7 +180,7 @@ biggest client: 20k, planned to rise to 100k
 avg: 1k, expected to rise
 500 clients
 
-msg size: ?
+msg size: few k
 
 ** IM
 
@@ -195,15 +190,7 @@ msg size: ?
 
 ** make IBasicProperties cloneable ([[bug:21271]])
 
-** MSBuild ([[bug:21220]])
-
-for .net client, since nant scares Windows people.
-
-Apparently msbuild can work under mono too.
-
-It is useful to have an msbuild, rather than just the dll in the GAC,
-because it allows source-level debugging in VS.
-
+** SSL ([[bug:19356]])
 ** DL{Q,E}
 
 For messages that get redelivered too often. See spec of basic.deliver
@@ -221,18 +208,6 @@ OTOH, DLEs would be far more flexible...
 information - namely the exchange name - for alternate exchanges.
 
 So let's go with DLEs instead.
-
-** stats / accounting
-
-Record stats on usage of system
-
-- per user connection and channel counters
-- per connection frame and data volume counters (in & out)
-- per channel command counter (inbound and outbound)
-  - perhaps further broken down by command
-- per queue msg counter (in & out)
-
-channels and connections reference users, so aggregation by user is possible
 
 ** ulimits
 
@@ -253,16 +228,27 @@ to keep track of these.
 
 Should these limits be per cluster or per host?
 
-** end-to-end acks
+** stats / accounting
 
-How can we get an ack all the way back to the publisher?
+Record stats on usage of system
 
-We could get the consumer to publish an ack message, but that seems
-redundant when it is already sending and ack for the message. OTOH, an
-application level ack is not always aligned with the messaging level
-ack, so using the latter for the former is not always right.
+- per user connection and channel counters
+- per connection frame and data volume counters (in & out)
+- per channel command counter (inbound and outbound)
+  - perhaps further broken down by command
+- per queue msg counter (in & out)
 
-** SSL ([[bug:19356]])
+channels and connections reference users, so aggregation by user is possible
+
+** MSBuild ([[bug:21220]])
+
+for .net client, since nant scares Windows people.
+
+Apparently msbuild can work under mono too.
+
+It is useful to have an msbuild, rather than just the dll in the GAC,
+because it allows source-level debugging in VS.
+
 
 * possible rabbit bugs
 
@@ -287,7 +273,6 @@ on some old dual core), made the problem go awway :(
 ** when rabbit is very busy, rabbitmqctl can time out ([[bug:21202]])
 with a {badrpc,timeout}
 
-
 * resolved
 
 ** persistent vs non-persistent
@@ -311,3 +296,19 @@ functionality to rabbit then keying some of it on the user makes sense.
 one - at the messaging level there is no distinction between requests,
 replies and notifications.
 
+
+* tasks
+** protocol
+*** reliability layer
+*** HA layer
+*** unicast refinements, tests and docs
+*** unicast port to Java
+** refine security analysis
+Aaron to get Mark to look at current doc and then see whether he needs
+any help
+** monitoring (rabbit and other)
+Aaron to send Mark's current doc to Matthias for review
+** deployment (rabbit and other)
+Aaron to send Mark's current doc to Matthias for review
+** algo dev infrastructure
+** rabbit bugs and extensions
