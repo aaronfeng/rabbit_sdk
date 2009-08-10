@@ -191,7 +191,7 @@ msg size: few k
 ** make IBasicProperties cloneable ([[bug:21271]])
 
 ** SSL ([[bug:19356]])
-** DL{Q,E}
+** DL{Q,E} ([[bug:20337]])
 
 For messages that get redelivered too often. See spec of basic.deliver
 for some hints. The limit & dlq name would be configured on a
@@ -209,7 +209,7 @@ information - namely the exchange name - for alternate exchanges.
 
 So let's go with DLEs instead.
 
-** ulimits
+** ulimits ([[bug:21384]])
 
 - #conns per second (1st derivative of connection counter)
 - #concurrent connections
@@ -228,7 +228,7 @@ to keep track of these.
 
 Should these limits be per cluster or per host?
 
-** stats / accounting
+** stats / accounting ([[bug:21387]])
 
 Record stats on usage of system
 
