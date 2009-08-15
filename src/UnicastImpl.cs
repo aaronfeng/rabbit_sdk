@@ -1,10 +1,10 @@
 namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
-     using Address   = System.String;
-     using MessageId = System.String;
-     using Name      = System.String;
+    using Address   = System.String;
+    using MessageId = System.String;
+    using Name      = System.String;
 
-     using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
+    using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
 
     public class Message : IMessage {
 
