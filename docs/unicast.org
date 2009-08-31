@@ -65,4 +65,3 @@ Need a whole bunch of settings to control reconnection policy.
 ** TODO API docs
 ** TODO test and fix error handling
 ** TODO use nunit
-** TODO review access modifiers

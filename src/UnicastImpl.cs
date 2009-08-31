@@ -6,7 +6,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
 
-    public class Message : IMessage {
+    class Message : IMessage {
 
         protected IBasicProperties m_properties;
         protected byte[]           m_body;
@@ -70,7 +70,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class ReceivedMessage : Message, IReceivedMessage {
+    class ReceivedMessage : Message, IReceivedMessage {
 
         protected BasicDeliverEventArgs m_delivery;
 
