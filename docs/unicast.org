@@ -40,13 +40,6 @@ affecting the delivery channel.
 * reliability design
 
 ** remove connection and channels from the interface
-- add a CreateMessage() method that returns a message with the props
-  set to emtpy BasicProperties (thus eliminating the need for the app
-  to obtain a channel in order to call model.CreateBasicProperties),
-  the From set to the Identity, and the MessageId set to NextId().
-- add a CreateReply(Message) method that calls Message.CreateReply()
-  and also sets MessageId to NextId(). Combined with the previous
-  change this allows us to remove NextId from the interface.
 - change Init so that instead of taking an IConnection it takes a
   ConnectionParams and a AmqpTcpEndpoint list.
 
@@ -72,3 +65,4 @@ Need a whole bunch of settings to control reconnection policy.
 ** TODO API docs
 ** TODO test and fix error handling
 ** TODO use nunit
+** TODO review access modifiers

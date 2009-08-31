@@ -35,14 +35,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         SetupDelegate Setup { get; set; }
 
-        IConnection  Connection       { get; }
-        IModel       SendingChannel   { get; }
-        IModel       ReceivingChannel { get; }
+        IConnection Connection { get; }
 
         void Init(IConnection conn);
         void Init(IConnection conn, long msgIdPrefix);
 
-        MessageId        NextId();
+        IMessage         CreateMessage();
+        IMessage         CreateReply(IMessage m);
         void             Send(IMessage m);
         IReceivedMessage Receive();
         void             Ack(IReceivedMessage m);

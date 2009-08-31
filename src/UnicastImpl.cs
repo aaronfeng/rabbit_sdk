@@ -130,12 +130,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public IConnection Connection {
             get { return m_connection; }
         }
-        public IModel SendingChannel {
-            get { return m_sendingChannel; }
-        }
-        public IModel ReceivingChannel {
-            get { return m_receivingChannel; }
-        }
 
         public Messaging() {}
 
@@ -159,30 +153,43 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected void Consume() {
-            m_consumer = new QueueingBasicConsumer(ReceivingChannel);
-            m_consumerTag = ReceivingChannel.BasicConsume
+            m_consumer = new QueueingBasicConsumer(m_receivingChannel);
+            m_consumerTag = m_receivingChannel.BasicConsume
                 (QueueName, false, null, m_consumer);
         }
 
         protected void Cancel() {
-            ReceivingChannel.BasicCancel(m_consumerTag);
+            m_receivingChannel.BasicCancel(m_consumerTag);
+        }
+
+        protected MessageId NextId() {
+            return System.String.Format("{0:x8}{1:x8}",
+                                        m_msgIdPrefix, m_msgIdSuffix++);
         }
 
         public static void DefaultSetup(IMessaging m,
                                         IModel send, IModel recv) {
         }
 
-        public MessageId NextId() {
-            return System.String.Format("{0:x8}{1:x8}",
-                                        m_msgIdPrefix, m_msgIdSuffix++);
+        public IMessage CreateMessage() {
+            IMessage m = new Message();
+            m.Properties = m_sendingChannel.CreateBasicProperties();
+            m.From       = Identity;
+            m.MessageId  = NextId();
+            return m;
+        }
+
+        public IMessage CreateReply(IMessage m) {
+            IMessage r  = m.CreateReply();
+            m.MessageId = NextId();
+            return r;
         }
 
         public void Send(IMessage m) {
-            SendingChannel.BasicPublish(ExchangeName, m.RoutingKey,
-                                        m.Properties, m.Body);
-            //TODO: if/when SendingChannel supports 'sent'
-            //notifications then we will translate those, rather than
-            //firing our own here
+            m_sendingChannel.BasicPublish(ExchangeName, m.RoutingKey,
+                                          m.Properties, m.Body);
+            //TODO: if/when IModel supports 'sent' notifications then
+            //we will translate those, rather than firing our own here
             if (Sent != null) Sent(this, m);
         }
 
@@ -196,15 +203,15 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public void Ack(IReceivedMessage m) {
-            ReceivingChannel.BasicAck
+            m_receivingChannel.BasicAck
                 (((ReceivedMessage)m).Delivery.DeliveryTag, false);
         }
 
         public void Close() {
             //FIXME: only do this if we are fully initialised
             Cancel();
-            SendingChannel.Abort();
-            ReceivingChannel.Abort();
+            m_sendingChannel.Abort();
+            m_receivingChannel.Abort();
         }
 
         void System.IDisposable.Dispose() {

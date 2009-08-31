@@ -61,20 +61,16 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 bar.Init(conn);
 
                 //send message from foo to bar
-                IMessage mf = new Message();
-                mf.Properties = foo.SendingChannel.CreateBasicProperties();
-                mf.Body       = Encode("message1");
-                mf.From       = foo.Identity;
-                mf.To         = "bar";
-                mf.MessageId  = foo.NextId();
+                IMessage mf = foo.CreateMessage();
+                mf.Body = Encode("message1");
+                mf.To   = "bar";
                 foo.Send(mf);
 
                 //receive message at bar and reply
                 IReceivedMessage rb = bar.Receive();
                 LogMessage("recv", bar, rb);
-                IMessage mb = rb.CreateReply();
-                mb.Body      = Encode("message2");
-                mb.MessageId = bar.NextId();
+                IMessage mb = bar.CreateReply(rb);
+                mb.Body = Encode("message2");
                 bar.Send(mb);
                 bar.Ack(rb);
 
@@ -139,20 +135,16 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 bar.Init(conn);
 
                 //send message from foo to bar
-                IMessage mf = new Message();
-                mf.Properties = foo.SendingChannel.CreateBasicProperties();
-                mf.Body       = Encode("message1");
-                mf.From       = foo.Identity;
-                mf.To         = "bar";
-                mf.MessageId  = foo.NextId();
+                IMessage mf = foo.CreateMessage();
+                mf.Body = Encode("message1");
+                mf.To   = "bar";
                 foo.Send(mf);
 
                 //receive message at bar and reply
                 IReceivedMessage rb = bar.Receive();
                 LogMessage("recv", bar, rb);
-                IMessage mb = rb.CreateReply();
-                mb.Body      = Encode("message2");
-                mb.MessageId = bar.NextId();
+                IMessage mb = bar.CreateReply(rb);
+                mb.Body = Encode("message2");
                 bar.Send(mb);
                 bar.Ack(rb);
 
