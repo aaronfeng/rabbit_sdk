@@ -188,7 +188,7 @@ parties back in sync
 
 ** scaling
 
-*** TODO get some estimates of baseline, peak, growth
+*** DONE get some estimates of baseline, peak, growth
 1M msg per day + 3m notifications
 
 <20% of agreements generate a margin call on any given day
@@ -203,11 +203,9 @@ msg size: few k
 
 * possible rabbit extensions
 
-** allow suppression of queue declaration in Subscription ([[bug:21286]])
-
-** make IBasicProperties cloneable ([[bug:21271]])
-
-** SSL ([[bug:19356]])
+** DONE allow suppression of queue declaration in Subscription ([[bug:21286]])
+** DONE make IBasicProperties cloneable ([[bug:21271]])
+** DONE SSL ([[bug:19356]])
 ** DL{Q,E} ([[bug:20337]])
 
 For messages that get redelivered too often. See spec of basic.deliver
@@ -257,7 +255,7 @@ Record stats on usage of system
 
 channels and connections reference users, so aggregation by user is possible
 
-** MSBuild ([[bug:21220]])
+** DONE MSBuild ([[bug:21220]])
 
 for .net client, since nant scares Windows people.
 
@@ -287,7 +285,7 @@ a difference.
 Running the same test on a faster machine (quad core, rather than a VM
 on some old dual core), made the problem go awway :(
 
-** when rabbit is very busy, rabbitmqctl can time out ([[bug:21202]])
+** DONE when rabbit is very busy, rabbitmqctl can time out ([[bug:21202]])
 with a {badrpc,timeout}
 
 * resolved
