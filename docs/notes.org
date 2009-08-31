@@ -204,7 +204,15 @@ msg size: few k
 * possible rabbit extensions
 
 ** DONE allow suppression of queue declaration in Subscription ([[bug:21286]])
+resolution: we actually ended up removing the use of Subscription
 ** DONE make IBasicProperties cloneable ([[bug:21271]])
+** TODO add some AmqpTcpEndpoint constructors
+ConnectionFactory has a whole bunch of overloads on CreateConnection,
+that all end up creating an AmqpTcpEndpoint. It would be useful to
+have these overloads on the AmqpTcpEndpoint constructor. Ideally we
+would also remove all the ConnectionFactory.CreateConnection
+overloads, but they are kinda convenient, so we should just make them
+use the new constructors rather than removing them.
 ** DONE SSL ([[bug:19356]])
 ** DL{Q,E} ([[bug:20337]])
 
