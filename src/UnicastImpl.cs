@@ -56,13 +56,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public IMessage CreateReply() {
-            //FIXME: this should clone Properties, once we have made
-            //IBasicProperties an ICloneable - see bug 21271
-            IMessage m = new Message(Properties, Body, RoutingKey);
-
-            Address origFrom = From; //TODO: drop once we clone
+            IMessage m = new Message(Properties.Clone() as IBasicProperties,
+                                     Body,
+                                     RoutingKey);
             m.From = To;
-            m.To = ReplyTo == null ? origFrom : ReplyTo;
+            m.To = ReplyTo == null ? From : ReplyTo;
             m.Properties.ClearReplyTo();
             m.CorrelationId = MessageId;
             m.Properties.ClearMessageId();
