@@ -45,8 +45,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected static void TestDirect(IConnection conn) {
-            SetupDelegate setup = delegate(IMessaging m) {
-                DeclareQueue(m.ReceivingChannel, m.QueueName);
+            SetupDelegate setup = delegate(IMessaging m,
+                                           IModel send, IModel recv) {
+                DeclareQueue(recv, m.QueueName);
             };
             using (IMessaging foo = new Messaging(), bar = new Messaging()) {
                 //create two parties
@@ -86,12 +87,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         protected static void TestRelayed(IConnection conn) {
             TestRelayedHelper
-                (conn, delegate(IMessaging m) {
-                    DeclareExchange(m.SendingChannel, m.ExchangeName, "fanout");
-                    DeclareExchange(m.ReceivingChannel, "out", "direct");
-                    DeclareQueue(m.ReceivingChannel, m.QueueName);
-                    BindQueue(m.ReceivingChannel,
-                              m.QueueName, "out", m.QueueName);
+                (conn, delegate(IMessaging m, IModel send, IModel recv) {
+                    DeclareExchange(send, m.ExchangeName, "fanout");
+                    DeclareExchange(recv, "out", "direct");
+                    DeclareQueue(recv, m.QueueName);
+                    BindQueue(recv, m.QueueName, "out", m.QueueName);
                 });
         }
 
@@ -105,11 +105,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 //create relay
                 relay.Identity = "relay";
                 relay.ExchangeName = "out";
-                relay.Setup = delegate(IMessaging m) {
-                    DeclareExchange(m.SendingChannel, m.ExchangeName, "direct");
-                    DeclareExchange(m.ReceivingChannel, "in", "fanout");
-                    DeclareQueue(m.ReceivingChannel, m.QueueName);
-                    BindQueue(m.ReceivingChannel, m.QueueName, "in", "");
+                relay.Setup = delegate(IMessaging m, IModel send, IModel recv) {
+                    DeclareExchange(send, m.ExchangeName, "direct");
+                    DeclareExchange(recv, "in", "fanout");
+                    DeclareQueue(recv, m.QueueName);
+                    BindQueue(recv, m.QueueName, "in", "");
                 };
                 relay.Init(conn);
 

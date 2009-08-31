@@ -92,7 +92,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected Address m_identity;
         protected Name    m_exchangeName  = "";
         protected Name    m_queueName     = "";
-        protected ushort  m_prefetchLimit = 0;
 
         protected SetupDelegate m_setup =
             new SetupDelegate(DefaultSetup);
@@ -122,10 +121,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             get { return ("".Equals(m_queueName) ? Identity : m_queueName); }
             set { m_queueName = value; }
         }
-        public ushort PrefetchLimit {
-            get { return m_prefetchLimit; }
-            set { m_prefetchLimit = value; }
-        }
 
         public SetupDelegate Setup {
             get { return m_setup; }
@@ -153,15 +148,14 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_msgIdPrefix = msgIdPrefix;
             m_msgIdSuffix = 0;
 
-            CreateAndConfigureChannels();
-            Setup(this);
+            CreateChannels();
+            Setup(this, m_sendingChannel, m_receivingChannel);
             Consume();
         }
 
-        protected void CreateAndConfigureChannels() {
+        protected void CreateChannels() {
             m_sendingChannel   = m_connection.CreateModel();
             m_receivingChannel = m_connection.CreateModel();
-            m_receivingChannel.BasicQos(0, PrefetchLimit, false);
         }
 
         protected void Consume() {
@@ -174,7 +168,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             ReceivingChannel.BasicCancel(m_consumerTag);
         }
 
-        public static void DefaultSetup(IMessaging m) {
+        public static void DefaultSetup(IMessaging m,
+                                        IModel send, IModel recv) {
         }
 
         public MessageId NextId() {

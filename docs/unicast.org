@@ -49,10 +49,6 @@ affecting the delivery channel.
   change this allows us to remove NextId from the interface.
 - change Init so that instead of taking an IConnection it takes a
   ConnectionParams and a AmqpTcpEndpoint list.
-- pass the channels to Setup, and make Setup responsible not just for
-  resource declaration but also any channel mode adjustments such as
-  setting the prefetch limit. The latter allows us to remove the
-  PrefetchLimit from the interface.
 
 ** automatc connection re-establishment
 We only re-establish the connection when it either just got dropped at
