@@ -8,17 +8,14 @@
 
 msg = {body, from, to, reply_to, message_id, correlation_id}
 
-methods:
+** methods
 - init(connection, optional msg_id_prefix). The msg_id_prefix forms
   the first part of ids created with next_id(). It should be
   monotonically increasing *between runs*. The currrent time is prob
   good enough for most apps, and that's the default. But apps may also
   consider keeping a disk-based counter.
-- create_subscription delegate that is called after the channels have
-  been created. The default implementation creates a subscription
-  which declares a queue w props name=queue, durable=false,
-  exclusive=false, auto-delete=false, and binds it to the exchange
-  (unless exchange=="") with bk=identity.
+- setup delegate that is called after the channels have
+  been created.
 - next_id() - apps can/should use this to populate the message_id
   field. It is important that apps call 'send' with monotonically
   increasing ids.
@@ -28,7 +25,7 @@ methods:
 - callback sent(msg) - invoked when broker has accepted
   responsibility
 
-props:
+** props
 - identity, exchange="", exchange_type="direct", queue=identity
 - prefetch_limit=0
 - readonly connection, sending_channel, receiving_channel
@@ -39,6 +36,40 @@ NB: internally we use *two* channels, one for publishes and one for
 deliveries/acks. This keeps the concurrency handling simpler and also
 means we can put the publish channel in tx/checkpoint mode w/o
 affecting the delivery channel.
+
+* reliability design
+
+** remove connection and channels from the interface
+- add a CreateMessage() method that returns a message with the props
+  set to emtpy BasicProperties (thus eliminating the need for the app
+  to obtain a channel in order to call model.CreateBasicProperties),
+  the From set to the Identity, and the MessageId set to NextId().
+- add a CreateReply(Message) method that calls Message.CreateReply()
+  and also sets MessageId to NextId(). Combined with the previous
+  change this allows us to remove NextId from the interface.
+- change Init so that instead of taking an IConnection it takes a
+  ConnectionParams and a AmqpTcpEndpoint list.
+- pass the channels to Setup, and make Setup responsible not just for
+  resource declaration but also any channel mode adjustments such as
+  setting the prefetch limit. The latter allows us to remove the
+  PrefetchLimit from the interface.
+
+** automatc connection re-establishment
+We only re-establish the connection when it either just got dropped at
+the tcp level, or the server closed the connection with a reason of
+connection-forced or internal-error. If the connection gets closed for
+any other reason, or we encounter a channel error (that doesn't close
+the connection) we do not attempt to reconnect.
+
+- catch all errors we encounter during usage of channels, and, if it
+  is a recoverable error, trigger reconnection. If the error is not
+  recoverable, or reconnection fails, throw the error to the caller.
+- on recovery, call Setup. If that fails for a recoverable reason,
+  rinse and repeat.
+- on recovery, retry the action, except in case of Ack, which we just
+  silently drop. If we encounter errors again then rinse and repeat.
+
+Need a whole bunch of settings to control reconnection policy.
 
 * todo
 
