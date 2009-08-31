@@ -1,5 +1,11 @@
 namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
+    //NB: For testing we declare all resources as
+    //auto-delete/exclusive and non-durable, to avoid manual
+    //cleanup. More typically the resources would be
+    //non-auto-delete/non-exclusive and durable, so that they survives
+    //server and client restarts.
+
     public class Test {
 
         public static int Main(string[] args) {
@@ -17,14 +23,40 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 LogMessage("sent", sender, m);
         }
 
+        // NB: For testing we declare all resources as
+        // auto-delete/exclusive and non-durable, to avoid manual
+        // cleanup. More typically the resources would be declared
+        // non-auto-delete/non-exclusive and durable, so that they
+        // survives server and client restarts.
+        
+        protected static void DeclareExchange(IModel m,
+                                              string name, string type) {
+            m.ExchangeDeclare(name, type,
+                              false, false, true, false, false, null);
+        }
+
+        protected static void DeclareQueue(IModel m, string name) {
+            m.QueueDeclare(name, false, false, true, false, false, null);
+        }
+
+        protected static void BindQueue(IModel m,
+                                        string q, string x,string rk) {
+            m.QueueBind(q, x, rk, false, null);
+        }
+
         protected static void TestDirect(IConnection conn) {
+            SetupDelegate setup = delegate(IMessaging m) {
+                DeclareQueue(m.ReceivingChannel, m.QueueName);
+            };
             using (IMessaging foo = new Messaging(), bar = new Messaging()) {
                 //create two parties
                 foo.Identity = "foo";
                 foo.Sent += Sent;
+                foo.Setup = setup;
                 foo.Init(conn);
                 bar.Identity = "bar";
                 bar.Sent += Sent;
+                bar.Setup = setup;
                 bar.Init(conn);
 
                 //send message from foo to bar
@@ -53,24 +85,18 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 }
 
         protected static void TestRelayed(IConnection conn) {
-            try {
-                TestRelayedHelper
-                    (conn, delegate(IMessaging m) {
-                        return new Subscription(m.ReceivingChannel,
-                                                m.QueueName, false,
-                                                "out", "direct", m.Identity);
-                    });
-            }
-            //cleanup resources left over by test
-            finally {
-                using (IModel ch = conn.CreateModel()) {
-                    Cleanup(ch);
-                }
-            }
+            TestRelayedHelper
+                (conn, delegate(IMessaging m) {
+                    DeclareExchange(m.SendingChannel, m.ExchangeName, "fanout");
+                    DeclareExchange(m.ReceivingChannel, "out", "direct");
+                    DeclareQueue(m.ReceivingChannel, m.QueueName);
+                    BindQueue(m.ReceivingChannel,
+                              m.QueueName, "out", m.QueueName);
+                });
         }
 
         protected static void TestRelayedHelper(IConnection conn,
-                                                CreateSubscriptionDelegate d) {
+                                                SetupDelegate d) {
             using (IMessaging
                    relay = new Messaging(),
                    foo = new Messaging(),
@@ -79,11 +105,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 //create relay
                 relay.Identity = "relay";
                 relay.ExchangeName = "out";
-                relay.ExchangeType = "direct";
-                relay.CreateSubscription = delegate(IMessaging m) {
-                    return new Subscription(m.ReceivingChannel,
-                                            m.QueueName, false,
-                                            "in", "fanout", "");
+                relay.Setup = delegate(IMessaging m) {
+                    DeclareExchange(m.SendingChannel, m.ExchangeName, "direct");
+                    DeclareExchange(m.ReceivingChannel, "in", "fanout");
+                    DeclareQueue(m.ReceivingChannel, m.QueueName);
+                    BindQueue(m.ReceivingChannel, m.QueueName, "in", "");
                 };
                 relay.Init(conn);
 
@@ -102,15 +128,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
                 //create two parties
                 foo.Identity = "foo";
-                foo.CreateSubscription = d;
+                foo.Setup = d;
                 foo.ExchangeName = "in";
-                foo.ExchangeType = "fanout";
                 foo.Sent += Sent;
                 foo.Init(conn);
                 bar.Identity = "bar";
-                bar.CreateSubscription = d;
+                bar.Setup = d;
                 bar.ExchangeName = "in";
-                bar.ExchangeType = "fanout";
                 bar.Sent += Sent;
                 bar.Init(conn);
 
@@ -144,40 +168,21 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             using (IModel ch = conn.CreateModel()) {
 
                 //declare exchanges
-                ch.ExchangeDeclare("in", "fanout", true);
-                ch.ExchangeDeclare("out", "direct", true);
+                DeclareExchange(ch, "in", "fanout");
+                DeclareExchange(ch, "out", "direct");
 
                 //declare queue and binding for relay
-                ch.QueueDeclare("relay", true);
-                ch.QueueBind("relay", "in", "", false, null);
+                DeclareQueue(ch, "relay");
+                BindQueue(ch, "relay", "in", "");
 
                 //declare queue and binding for two participants
-                ch.QueueDeclare("foo", true);
-                ch.QueueBind("foo", "out", "foo", false, null);
-                ch.QueueDeclare("bar", true);
-                ch.QueueBind("bar", "out", "bar", false, null);
+                DeclareQueue(ch, "foo");
+                BindQueue(ch, "foo", "out", "foo");
+                DeclareQueue(ch, "bar");
+                BindQueue(ch, "bar", "out", "bar");
 
-                //set up participants, send some messages, cleanup
-                try {
-                    TestRelayedHelper
-                        (conn, delegate(IMessaging m) {
-                            return new PassiveSubscription(m.ReceivingChannel,
-                                                           m.QueueName);
-                        });
-                }
-                //cleanup previously declared resources
-                finally {
-                    Cleanup(ch);
-                }
-            }
-        }
-
-        protected static void Cleanup(IModel ch) {
-            foreach (string q in new string[] {"relay", "foo", "bar"}) {
-                ch.QueueDelete(q, false, false, false);
-            }
-            foreach (string e in new string[] {"in", "out"}) {
-                ch.ExchangeDelete(e, false, false);
+                //set up participants, send some messages
+                TestRelayedHelper(conn, Messaging.DefaultSetup);
             }
         }
 
@@ -194,21 +199,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         protected static string Decode(byte[] b) {
             return System.Text.Encoding.UTF8.GetString(b);
-        }
-
-    }
-
-    //This doesn't actually work yet since Subscription at present
-    //does not allow us to override how/whether queues are
-    //declared. That will be addressed in bug 21286
-    public class PassiveSubscription : Subscription {
-
-        public PassiveSubscription(IModel model, string queueName) :
-            base(model, queueName, false) {
-        }
-
-        public bool DeclareQueue(IModel model, string queueName) {
-            return false;
         }
 
     }

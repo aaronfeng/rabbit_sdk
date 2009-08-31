@@ -74,6 +74,23 @@ Q: should publishes be totally async, even in the presence of
   disconnects? Ideally yes, but there is a danger of buffering vast
   volumes of messages during prolonged outages.
 
+***** alternative design
+
+Instead of keeping track of interesting channel actions, and not
+dealing with commands because they are too hard, we provide on-connect
+and on-disconnect hooks in which an API user can perform all the
+necessary channel setup and resource declaration.
+
+It is up to the users to ensure that their use of commands is safe,
+i.e. doesn't suffer from the "stomp on resources created/deleted by
+other connections" problem.
+
+We could even conceivably prevent any use of "configuration" commands
+outside the hooks.
+
+****** Issue: names of private queues somehow need to be passed to app
+perhaps return Maps of x and q names
+
 **** TODO reliable, asynchronous, point-to-point conversation API
 
 see [[file:unicast.org][unicast]]

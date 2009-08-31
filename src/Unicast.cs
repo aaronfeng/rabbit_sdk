@@ -23,7 +23,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     public interface IReceivedMessage : IMessage {
     }
 
-    public delegate Subscription CreateSubscriptionDelegate(IMessaging m);
+    public delegate void SetupDelegate(IMessaging m);
 
     public interface IMessaging : System.IDisposable {
 
@@ -31,16 +31,14 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         Address Identity      { get; set; }
         Name    ExchangeName  { get; set; }
-        string  ExchangeType  { get; set; }
         Name    QueueName     { get; set; }
         ushort  PrefetchLimit { get; set; }
 
-        CreateSubscriptionDelegate CreateSubscription { get; set; }
+        SetupDelegate Setup { get; set; }
 
         IConnection  Connection       { get; }
         IModel       SendingChannel   { get; }
         IModel       ReceivingChannel { get; }
-        Subscription Subscription     { get; }
 
         void Init(IConnection conn);
         void Init(IConnection conn, long msgIdPrefix);

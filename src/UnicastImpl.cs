@@ -93,17 +93,18 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         protected Address m_identity;
         protected Name    m_exchangeName  = "";
-        protected string  m_exchangeType  = "direct";
         protected Name    m_queueName     = "";
         protected ushort  m_prefetchLimit = 0;
 
-        protected CreateSubscriptionDelegate m_createSubscription =
-            new CreateSubscriptionDelegate(DefaultCreateSubscription);
+        protected SetupDelegate m_setup =
+            new SetupDelegate(DefaultSetup);
 
-        protected IConnection  m_connection;
-        protected IModel       m_sendingChannel;
-        protected IModel       m_receivingChannel;
-        protected Subscription m_subscription;
+        protected IConnection m_connection;
+        protected IModel      m_sendingChannel;
+        protected IModel      m_receivingChannel;
+
+        protected QueueingBasicConsumer m_consumer;
+        protected string                m_consumerTag;
 
         protected long m_msgIdPrefix;
         protected long m_msgIdSuffix;
@@ -118,10 +119,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             get { return m_exchangeName; }
             set { m_exchangeName = value; }
         }
-        public string ExchangeType {
-            get { return m_exchangeType; }
-            set { m_exchangeType = value; }
-        }
+
         public Name QueueName {
             get { return ("".Equals(m_queueName) ? Identity : m_queueName); }
             set { m_queueName = value; }
@@ -131,9 +129,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             set { m_prefetchLimit = value; }
         }
 
-        public CreateSubscriptionDelegate CreateSubscription {
-            get { return m_createSubscription; }
-            set { m_createSubscription = value; }
+        public SetupDelegate Setup {
+            get { return m_setup; }
+            set { m_setup = value; }
         }
 
         public IConnection Connection {
@@ -144,10 +142,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
         public IModel ReceivingChannel {
             get { return m_receivingChannel; }
-        }
-
-        public Subscription Subscription {
-            get { return m_subscription; }
         }
 
         public Messaging() {}
@@ -162,7 +156,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_msgIdSuffix = 0;
 
             CreateAndConfigureChannels();
-            m_subscription = CreateSubscription(this);
+            Setup(this);
+            Consume();
         }
 
         protected void CreateAndConfigureChannels() {
@@ -171,12 +166,17 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_receivingChannel.BasicQos(0, PrefetchLimit, false);
         }
 
-        protected static Subscription DefaultCreateSubscription(IMessaging m) {
-            return ("".Equals(m.ExchangeName) ?
-                    new Subscription(m.ReceivingChannel, m.QueueName, false) :
-                    new Subscription(m.ReceivingChannel, m.QueueName, false,
-                                     m.ExchangeName, m.ExchangeType,
-                                     m.Identity));
+        protected void Consume() {
+            m_consumer = new QueueingBasicConsumer(ReceivingChannel);
+            m_consumerTag = ReceivingChannel.BasicConsume
+                (QueueName, false, null, m_consumer);
+        }
+
+        protected void Cancel() {
+            ReceivingChannel.BasicCancel(m_consumerTag);
+        }
+
+        public static void DefaultSetup(IMessaging m) {
         }
 
         public MessageId NextId() {
@@ -194,17 +194,22 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public IReceivedMessage Receive() {
-            BasicDeliverEventArgs e = Subscription.Next();
-            return (e == null) ? null : new ReceivedMessage(e);
+            try {
+                return new ReceivedMessage
+                    ((BasicDeliverEventArgs)m_consumer.Queue.Dequeue());
+            } catch (System.IO.EndOfStreamException) {
+                return null;
+            }
         }
 
         public void Ack(IReceivedMessage m) {
-            Subscription.Ack(((ReceivedMessage)m).Delivery);
+            ReceivingChannel.BasicAck
+                (((ReceivedMessage)m).Delivery.DeliveryTag, false);
         }
 
         public void Close() {
             //FIXME: only do this if we are fully initialised
-            Subscription.Close();
+            Cancel();
             SendingChannel.Abort();
             ReceivingChannel.Abort();
         }
