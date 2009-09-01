@@ -47,6 +47,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         IMessage         CreateReply(IMessage m);
         void             Send(IMessage m);
         IReceivedMessage Receive();
+        IReceivedMessage ReceiveNoWait();
         void             Ack(IReceivedMessage m);
     }
 

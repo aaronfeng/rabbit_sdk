@@ -211,8 +211,19 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public IReceivedMessage Receive() {
             try {
-                return new ReceivedMessage
-                    ((BasicDeliverEventArgs)m_consumer.Queue.Dequeue());
+                BasicDeliverEventArgs ev =
+                    (BasicDeliverEventArgs)m_consumer.Queue.Dequeue();
+                return new ReceivedMessage(ev);
+            } catch (System.IO.EndOfStreamException) {
+                return null;
+            }
+        }
+
+        public IReceivedMessage ReceiveNoWait() {
+            try {
+                BasicDeliverEventArgs ev =
+                    (BasicDeliverEventArgs)m_consumer.Queue.DequeueNoWait(null);
+                return (ev == null) ? null : new ReceivedMessage(ev);
             } catch (System.IO.EndOfStreamException) {
                 return null;
             }
