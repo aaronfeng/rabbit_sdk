@@ -138,6 +138,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             get { return m_servers; }
         }
 
+        public MessageId CurrentId {
+            get { return System.String.Format("{0:x8}{1:x8}",
+                                              m_msgIdPrefix, m_msgIdSuffix); }
+        }
+
         public Messaging() {}
 
         public void Init(ConnectionFactory factory,
@@ -179,8 +184,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected MessageId NextId() {
-            return System.String.Format("{0:x8}{1:x8}",
-                                        m_msgIdPrefix, m_msgIdSuffix++);
+            MessageId res = CurrentId;
+            m_msgIdSuffix++;
+            return res;
         }
 
         public static void DefaultSetup(IMessaging m,
