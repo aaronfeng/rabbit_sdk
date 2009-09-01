@@ -206,13 +206,17 @@ msg size: few k
 ** DONE allow suppression of queue declaration in Subscription ([[bug:21286]])
 resolution: we actually ended up removing the use of Subscription
 ** DONE make IBasicProperties cloneable ([[bug:21271]])
-** TODO add some AmqpTcpEndpoint constructors
+** DONE add some AmqpTcpEndpoint constructors ([[bug:21531]])
 ConnectionFactory has a whole bunch of overloads on CreateConnection,
 that all end up creating an AmqpTcpEndpoint. It would be useful to
 have these overloads on the AmqpTcpEndpoint constructor. Ideally we
 would also remove all the ConnectionFactory.CreateConnection
 overloads, but they are kinda convenient, so we should just make them
 use the new constructors rather than removing them.
+** TODO generic protocol constants ([[bug:21537]])
+There doesn't seem to be a protocol version agnostic way of getting
+hold of protocol constants, even though most of them are common across
+all versions.
 ** DONE SSL ([[bug:19356]])
 ** DL{Q,E} ([[bug:20337]])
 
