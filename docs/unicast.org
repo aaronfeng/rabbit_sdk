@@ -53,8 +53,14 @@ the connection) we do not attempt to reconnect.
   rinse and repeat.
 - on recovery, retry the action, except in case of Ack, which we just
   silently drop. If we encounter errors again then rinse and repeat.
+- received messages need to contain the channel on which they were
+  received so that when they are Ack'ed we can detect whether we've
+  had a reconnection in the meantime and silently drop the Ack.
 
 Need a whole bunch of settings to control reconnection policy.
+
+We need to support a single sending thread and multiple
+receiving/ack-ing threads.
 
 * todo
 
