@@ -1,11 +1,36 @@
-namespace RabbitMQ.Client.MessagePatterns.Unicast {
+namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
+
+    //TODO: this class should live in a separate assembly
+    public class TestHelper {
+
+        public static void Sent(IMessaging sender, IMessage m) {
+                LogMessage("sent", sender, m);
+        }
+
+        public static void LogMessage(string action,
+                                         IMessaging actor,
+                                         IMessage m) {
+            System.Console.WriteLine("{0} {1} {2}",
+                                     actor.Identity, action, Decode(m.Body));
+        }
+
+        public static byte[] Encode(string s) {
+            return System.Text.Encoding.UTF8.GetBytes(s);
+        }
+
+        public static string Decode(byte[] b) {
+            return System.Text.Encoding.UTF8.GetString(b);
+        }
+
+    }
+
 
     //NB: For testing we declare all resources as auto-delete and
     //non-durable, to avoid manual cleanup. More typically the
     //resources would be non-auto-delete/non-exclusive and durable, so
     //that they survives server and client restarts.
 
-    public class Test {
+    public class Tests {
 
         public static int Main(string[] args) {
 

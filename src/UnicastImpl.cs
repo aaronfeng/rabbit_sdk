@@ -234,29 +234,4 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    //TODO: this class should live in a separate assembly
-    public class TestHelper {
-
-        public static void Sent(IMessaging sender, IMessage m) {
-                LogMessage("sent", sender, m);
-        }
-
-        public static void LogMessage(string action,
-                                         IMessaging actor,
-                                         IMessage m) {
-            System.Console.WriteLine("{0} {1} {2}",
-                                     actor.Identity, action, Decode(m.Body));
-        }
-
-        public static byte[] Encode(string s) {
-            return System.Text.Encoding.UTF8.GetBytes(s);
-        }
-
-        public static string Decode(byte[] b) {
-            return System.Text.Encoding.UTF8.GetString(b);
-        }
-
-    }
-
-
 }
