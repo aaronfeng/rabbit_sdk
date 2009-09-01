@@ -35,10 +35,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         SetupDelegate Setup { get; set; }
 
-        IConnection Connection { get; }
+        ConnectionFactory ConnectionFactory { get; }
+        AmqpTcpEndpoint[] Servers { get; }
 
-        void Init(IConnection conn);
-        void Init(IConnection conn, long msgIdPrefix);
+        void Init(ConnectionFactory factory, params AmqpTcpEndpoint[] servers);
+        void Init(long msgIdPrefix,
+                  ConnectionFactory factory, params AmqpTcpEndpoint[] servers);
+        void Close();
 
         IMessage         CreateMessage();
         IMessage         CreateReply(IMessage m);

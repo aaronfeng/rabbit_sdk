@@ -96,6 +96,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected SetupDelegate m_setup =
             new SetupDelegate(DefaultSetup);
 
+        protected ConnectionFactory m_factory;
+        protected AmqpTcpEndpoint[] m_servers;
+
         protected IConnection m_connection;
         protected IModel      m_sendingChannel;
         protected IModel      m_receivingChannel;
@@ -127,24 +130,37 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             set { m_setup = value; }
         }
 
-        public IConnection Connection {
-            get { return m_connection; }
+        public ConnectionFactory ConnectionFactory {
+            get { return m_factory; }
+        }
+
+        public AmqpTcpEndpoint[] Servers {
+            get { return m_servers; }
         }
 
         public Messaging() {}
 
-        public void Init(IConnection conn) {
-            Init(conn, System.DateTime.UtcNow.Ticks);
+        public void Init(ConnectionFactory factory,
+                         params AmqpTcpEndpoint[] servers) {
+            Init(System.DateTime.UtcNow.Ticks, factory, servers);
         }
 
-        public void Init(IConnection conn, long msgIdPrefix) {
-            m_connection = conn;
+        public void Init(long msgIdPrefix,
+                         ConnectionFactory factory,
+                         params AmqpTcpEndpoint[] servers) {
             m_msgIdPrefix = msgIdPrefix;
             m_msgIdSuffix = 0;
+            m_factory     = factory;
+            m_servers     = servers;
 
+            CreateConnection();
             CreateChannels();
             Setup(this, m_sendingChannel, m_receivingChannel);
             Consume();
+        }
+
+        protected void CreateConnection() {
+            m_connection = m_factory.CreateConnection(m_servers);
         }
 
         protected void CreateChannels() {
@@ -209,9 +225,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public void Close() {
             //FIXME: only do this if we are fully initialised
-            Cancel();
-            m_sendingChannel.Abort();
-            m_receivingChannel.Abort();
+            m_connection.Abort();
         }
 
         void System.IDisposable.Dispose() {

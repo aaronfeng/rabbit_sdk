@@ -9,13 +9,14 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     public class Test {
 
         public static int Main(string[] args) {
-            using (IConnection conn = new ConnectionFactory().
-                   CreateConnection("localhost")) {
-                TestDirect(conn);
-                TestRelayed(conn);
-                TestPreconfigured(conn);
-            }
 
+            ConnectionFactory factory = new ConnectionFactory();
+            AmqpTcpEndpoint server = new AmqpTcpEndpoint();
+
+            TestDirect(factory, server);
+            TestRelayed(factory, server);
+            TestPreconfigured(factory, server);
+            
             return 0;
         }
 
@@ -36,7 +37,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected static void DeclareQueue(IModel m, string name) {
-            m.QueueDeclare(name, false, false, true, false, false, null);
+            m.QueueDeclare(name, false, false, false, true, false, null);
         }
 
         protected static void BindQueue(IModel m,
@@ -44,7 +45,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m.QueueBind(q, x, rk, false, null);
         }
 
-        protected static void TestDirect(IConnection conn) {
+        protected static void TestDirect(ConnectionFactory factory,
+                                         AmqpTcpEndpoint server) {
             SetupDelegate setup = delegate(IMessaging m,
                                            IModel send, IModel recv) {
                 DeclareQueue(recv, m.QueueName);
@@ -54,11 +56,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 foo.Identity = "foo";
                 foo.Sent += Sent;
                 foo.Setup = setup;
-                foo.Init(conn);
+                foo.Init(factory, server);
                 bar.Identity = "bar";
                 bar.Sent += Sent;
                 bar.Setup = setup;
-                bar.Init(conn);
+                bar.Init(factory, server);
 
                 //send message from foo to bar
                 IMessage mf = foo.CreateMessage();
@@ -81,18 +83,20 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             }
 }
 
-        protected static void TestRelayed(IConnection conn) {
+        protected static void TestRelayed(ConnectionFactory factory,
+                                          AmqpTcpEndpoint server) {
             TestRelayedHelper
-                (conn, delegate(IMessaging m, IModel send, IModel recv) {
+                (delegate(IMessaging m, IModel send, IModel recv) {
                     DeclareExchange(send, m.ExchangeName, "fanout");
                     DeclareExchange(recv, "out", "direct");
                     DeclareQueue(recv, m.QueueName);
                     BindQueue(recv, m.QueueName, "out", m.QueueName);
-                });
+                }, factory, server);
         }
 
-        protected static void TestRelayedHelper(IConnection conn,
-                                                SetupDelegate d) {
+        protected static void TestRelayedHelper(SetupDelegate d,
+                                                ConnectionFactory factory,
+                                                AmqpTcpEndpoint server) {
             using (IMessaging
                    relay = new Messaging(),
                    foo = new Messaging(),
@@ -107,7 +111,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                     DeclareQueue(recv, m.QueueName);
                     BindQueue(recv, m.QueueName, "in", "");
                 };
-                relay.Init(conn);
+                relay.Init(factory, server);
 
                 //activate relay
                 new System.Threading.Thread
@@ -127,12 +131,12 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 foo.Setup = d;
                 foo.ExchangeName = "in";
                 foo.Sent += Sent;
-                foo.Init(conn);
+                foo.Init(factory, server);
                 bar.Identity = "bar";
                 bar.Setup = d;
                 bar.ExchangeName = "in";
                 bar.Sent += Sent;
-                bar.Init(conn);
+                bar.Init(factory, server);
 
                 //send message from foo to bar
                 IMessage mf = foo.CreateMessage();
@@ -156,8 +160,19 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         }
 
-        protected static void TestPreconfigured(IConnection conn)  {
-            using (IModel ch = conn.CreateModel()) {
+        protected static void TestPreconfigured(ConnectionFactory factory,
+                                                AmqpTcpEndpoint server)  {
+            //The idea here is to simulate a setup where are the
+            //resources are pre-declared outside the Unicast messaging
+            //framework.
+            //
+            //In the interest of keeping the tests from leaving
+            //resources behind, we declare all of them as auto-delete
+            //(NB: exclusive doesn't work since we perform the
+            //resource declaration on a different connection), which
+            //wouldn't happen normally in this kind of setup.
+            using (IConnection conn = factory.CreateConnection(server)) {
+                IModel ch = conn.CreateModel();
 
                 //declare exchanges
                 DeclareExchange(ch, "in", "fanout");
@@ -172,10 +187,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 BindQueue(ch, "foo", "out", "foo");
                 DeclareQueue(ch, "bar");
                 BindQueue(ch, "bar", "out", "bar");
-
-                //set up participants, send some messages
-                TestRelayedHelper(conn, Messaging.DefaultSetup);
             }
+            //set up participants, send some messages
+            TestRelayedHelper(Messaging.DefaultSetup, factory, server);
         }
 
         protected static void LogMessage(string action,

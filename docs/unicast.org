@@ -39,10 +39,6 @@ affecting the delivery channel.
 
 * reliability design
 
-** remove connection and channels from the interface
-- change Init so that instead of taking an IConnection it takes a
-  ConnectionParams and a AmqpTcpEndpoint list.
-
 ** automatc connection re-establishment
 We only re-establish the connection when it either just got dropped at
 the tcp level, or the server closed the connection with a reason of
