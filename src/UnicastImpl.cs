@@ -4,7 +4,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     using MessageId = System.String;
     using Name      = System.String;
 
-    using BasicDeliverEventArgs = RabbitMQ.Client.Events.BasicDeliverEventArgs;
+    using BasicDeliverEventArgs  = RabbitMQ.Client.Events.BasicDeliverEventArgs;
+    using ClientExceptions       = RabbitMQ.Client.Exceptions;
+    //TODO: find a protocol version agnostic way of doing this
+    using ProtocolConstants      = RabbitMQ.Client.Framing.v0_8.Constants;
 
     class Message : IMessage {
 
@@ -87,6 +90,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
+    public delegate void Thunk();
+
     public class Messaging : IMessaging {
 
         protected Address m_identity;
@@ -158,10 +163,55 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_factory     = factory;
             m_servers     = servers;
 
+            InitialConnect();
+        }
+
+        protected System.Exception AttemptOperation(Thunk t) {
+            try {
+                t();
+                return null;
+            } catch (ClientExceptions.AlreadyClosedException e) {
+                ShutdownEventArgs s = e.ShutdownReason;
+                if (s != null &&
+                    ((s.ReplyCode == ProtocolConstants.ConnectionForced) ||
+                     (s.ReplyCode == ProtocolConstants.InternalError))) {
+                    return e;
+                } else {
+                        throw e;
+                }
+            } catch (ClientExceptions.BrokerUnreachableException e) {
+                //TODO: we may want to be more specific here
+                return e;
+            } catch (System.IO.IOException e) {
+                //TODO: we may want to be more specific here
+                return e;
+            }
+        }
+
+        protected void InitialConnect() {
+            while(true) {
+                System.Exception e = AttemptOperation(Connect);
+                if (e == null) return;
+                if (!Reconnect()) throw e;
+            }
+        }
+
+        protected void Connect() {
             CreateConnection();
             CreateChannels();
             Setup(this, m_sendingChannel, m_receivingChannel);
             Consume();
+        }
+
+        protected bool Reconnect() {
+            //TODO: proper reconnection policy
+            try {
+                for (int i = 0; i < 60; i++) {
+                    if (AttemptOperation(Connect) == null) return true;
+                    System.Threading.Thread.Sleep(1000);
+                }
+            } catch (System.Exception) {}
+            return false;
         }
 
         protected void CreateConnection() {
@@ -208,8 +258,15 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public void Send(IMessage m) {
-            m_sendingChannel.BasicPublish(ExchangeName, m.RoutingKey,
-                                          m.Properties, m.Body);
+            while(true) {
+                System.Exception e = AttemptOperation(delegate () {
+                        m_sendingChannel.BasicPublish(ExchangeName,
+                                                      m.RoutingKey,
+                                                      m.Properties, m.Body);
+                    });
+                if (e == null) break;
+                if (!Reconnect()) throw e;
+            }
             //TODO: if/when IModel supports 'sent' notifications then
             //we will translate those, rather than firing our own here
             if (Sent != null) Sent(this, m);
