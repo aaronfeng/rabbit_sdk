@@ -38,6 +38,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         ConnectionFactory ConnectionFactory { get; }
         AmqpTcpEndpoint[] Servers { get; }
 
+        MessageId         CurrentId { get; }
+
         void Init(ConnectionFactory factory, params AmqpTcpEndpoint[] servers);
         void Init(long msgIdPrefix,
                   ConnectionFactory factory, params AmqpTcpEndpoint[] servers);

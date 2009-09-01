@@ -1,6 +1,7 @@
 namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
     using Address   = System.String;
+    using MessageId = System.String;
 
     public class Client {
 
@@ -15,6 +16,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         int pend; //pending requests
         int recv; //requests received
         int repl; //replies sent
+        int disc; //replies discared
 
         Client() {
         }
@@ -31,11 +33,12 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
         void DisplayStats() {
             System.Console.Write("\r" +
-                                 "sent: {0,10}, " +
-                                 "pend: {1,10}, " +
-                                 "recv: {2,10}, " +
-                                 "repl: {3,10}",
-                                 sent, pend, recv, repl);
+                                 "sent: {0,8}, " +
+                                 "pend: {1,8}, " +
+                                 "recv: {2,8}, " +
+                                 "repl: {3,8}, " +
+                                 "disc: {4,8}",
+                                 sent, pend, recv, repl, disc);
         }
 
         void Run(Address me, Address you, AmqpTcpEndpoint server, int sleep) {
@@ -47,6 +50,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 };
                 m.Init(new ConnectionFactory(), server);
                 byte[] body = new byte[0];
+                MessageId baseId = m.CurrentId;
                 for (int i = 0;; i++) {
                     //send
                     IMessage msg = m.CreateMessage();
@@ -63,7 +67,12 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                             DisplayStats();
                             m.Send(m.CreateReply(r));
                         } else {
-                            pend--;
+                            if (System.String.Compare
+                                (r.CorrelationId,  baseId) < 0) {
+                                disc++;
+                            } else {
+                                pend--;
+                            }
                             DisplayStats();
                         }
                         m.Ack(r);
