@@ -36,21 +36,26 @@
     </csc>
   </target>
 
-  <target name="examples" description="compiles the examples"
-          depends="build">
-    <mkdir dir="${build.dir}" />
+  <target name="one-example">
     <csc target="exe"
-	 output="${build.dir}/UnicastTest.exe"
-	 debug="${debug}">
+         output="${build.dir}/${example.program}.exe"
+         debug="${debug}">
       <sources>
-	<include name="src/UnicastTest.cs" />
+	    <include name="src/${example.program}.cs" />
       </sources>
       <references>
         <include name="lib/RabbitMQ.Client.dll" />
-        <include name="build/RabbitMQ.Client.MessagePatterns.Unicast.dll" />
+        <include name="${target.dllname}" />
       </references>
     </csc>
+  </target>
+
+  <target name="examples" description="compiles the examples"
+          depends="build">
+    <mkdir dir="${build.dir}" />
     <copy file="lib/RabbitMQ.Client.dll" todir="${build.dir}"/>
+    <property name="example.program" value="UnicastTest"/><call target="one-example"/>
+    <property name="example.program" value="UnicastClient"/><call target="one-example"/>
   </target>
 
 <!--
