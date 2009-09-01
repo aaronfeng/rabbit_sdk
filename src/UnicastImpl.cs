@@ -197,7 +197,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public IMessage CreateReply(IMessage m) {
             IMessage r  = m.CreateReply();
-            m.MessageId = NextId();
+            r.MessageId = NextId();
             return r;
         }
 
