@@ -273,28 +273,41 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public IReceivedMessage Receive() {
-            try {
-                BasicDeliverEventArgs ev =
-                    (BasicDeliverEventArgs)m_consumer.Queue.Dequeue();
-                return new ReceivedMessage(ev);
-            } catch (System.IO.EndOfStreamException) {
-                return null;
+            while(true) {
+                try {
+                    BasicDeliverEventArgs ev =
+                        (BasicDeliverEventArgs)m_consumer.Queue.Dequeue();
+                    return new ReceivedMessage(ev);
+                } catch (System.IO.EndOfStreamException e) {
+                    if (!Reconnect()) throw e;
+                }
             }
         }
 
         public IReceivedMessage ReceiveNoWait() {
-            try {
-                BasicDeliverEventArgs ev =
-                    (BasicDeliverEventArgs)m_consumer.Queue.DequeueNoWait(null);
-                return (ev == null) ? null : new ReceivedMessage(ev);
-            } catch (System.IO.EndOfStreamException) {
-                return null;
+            while (true) {
+                try {
+                    BasicDeliverEventArgs ev =
+                        (BasicDeliverEventArgs)
+                        m_consumer.Queue.DequeueNoWait(null);
+                    return (ev == null) ? null : new ReceivedMessage(ev);
+                } catch (System.IO.EndOfStreamException e) {
+                    if (!Reconnect()) throw e;
+                }
             }
         }
 
         public void Ack(IReceivedMessage m) {
-            m_receivingChannel.BasicAck
-                (((ReceivedMessage)m).Delivery.DeliveryTag, false);
+            //TODO: drop acks for messages received on a different
+            //channel
+            Exception e = AttemptOperation(delegate () {
+                    m_receivingChannel.BasicAck
+                    (((ReceivedMessage)m).Delivery.DeliveryTag, false);
+                });
+            //Acks must not be retried since they are tied to the
+            //channel on which the message was delivered
+            if (e == null) return;
+            if (!Reconnect()) throw e;
         }
 
         public void Close() {
