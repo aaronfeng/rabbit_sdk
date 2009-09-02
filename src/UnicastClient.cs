@@ -1,22 +1,32 @@
+using System;
+
 namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
-    using Address   = System.String;
-    using MessageId = System.String;
+    using Address   = String;
+    using MessageId = String;
+
+    using Hashtable = System.Collections.Hashtable;
+
+    using System.Text;
 
     public class Client {
 
         public static int Main(string[] args) {
             Client c = new Client();
             c.Run(args[0], args[1], new AmqpTcpEndpoint(),
-                  System.Int32.Parse(args[2]));
+                  Int32.Parse(args[2]));
             return 0;
         }
+
+        Hashtable peerStats = new Hashtable();
 
         int sent; //requests sent
         int pend; //pending requests
         int recv; //requests received
         int repl; //replies sent
         int disc; //replies discared
+        int dups; //detected received duplicates
+        int lost; //detected lost messages
 
         Client() {
         }
@@ -31,14 +41,32 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
             DisplayStats();
         }
 
+        void UpdatePeerStats(String from, int seq) {
+            if (!peerStats.ContainsKey(from)) {
+                peerStats[from] = seq;
+                return;
+            }
+            int current = (int)peerStats[from];
+            if (seq <= current) {
+                dups++;
+            } else {
+                if (seq > current + 1) {
+                    lost += seq - current + 1;
+                }
+                peerStats[from] = seq;
+            }
+        }
+
         void DisplayStats() {
             System.Console.Write("\r" +
-                                 "sent: {0,8}, " +
-                                 "pend: {1,8}, " +
-                                 "recv: {2,8}, " +
-                                 "repl: {3,8}, " +
-                                 "disc: {4,8}",
-                                 sent, pend, recv, repl, disc);
+                                 "sent {0,6}, " +
+                                 "pend {1,6}, " +
+                                 "recv {2,6}, " +
+                                 "repl {3,6}, " +
+                                 "disc {4,6}, " +
+                                 "dups {5,6}, " +
+                                 "lost {6,6}",
+                                 sent, pend, recv, repl, disc, dups, lost);
         }
 
         void Run(Address me, Address you, AmqpTcpEndpoint server, int sleep) {
@@ -49,12 +77,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                     recv.QueueDeclare(u.Identity, true); //durable
                 };
                 m.Init(new ConnectionFactory(), server);
-                byte[] body = new byte[0];
                 MessageId baseId = m.CurrentId;
                 for (int i = 0;; i++) {
                     //send
                     IMessage msg = m.CreateMessage();
-                    msg.Body = body;
+                    msg.Body = Encoding.UTF8.GetBytes("" + i);
                     msg.To   = you;
                     msg.Properties.SetPersistent(true);
                     m.Send(msg);
@@ -64,11 +91,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                         if (r == null) break;
                         if (r.CorrelationId == null) {
                             recv++;
+                            int seq = Int32.Parse
+                                (Encoding.UTF8.GetString(r.Body));
+                            UpdatePeerStats(r.From, seq);
                             DisplayStats();
                             m.Send(m.CreateReply(r));
                         } else {
-                            if (System.String.Compare
-                                (r.CorrelationId,  baseId) < 0) {
+                            if (String.Compare(r.CorrelationId,  baseId) < 0) {
                                 disc++;
                             } else {
                                 pend--;
