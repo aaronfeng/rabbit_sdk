@@ -8,6 +8,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     using BasicDeliverEventArgs  = RabbitMQ.Client.Events.BasicDeliverEventArgs;
     using ClientExceptions       = RabbitMQ.Client.Exceptions;
+    using SharedQueue            = RabbitMQ.Util.SharedQueue;
     //TODO: find a protocol version agnostic way of doing this
     using ProtocolConstants      = RabbitMQ.Client.Framing.v0_8.Constants;
 
@@ -77,17 +78,63 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     class ReceivedMessage : Message, IReceivedMessage {
 
+        protected IModel m_channel;
         protected BasicDeliverEventArgs m_delivery;
+
+        public IModel Channel {
+            get { return m_channel; }
+        }
 
         public BasicDeliverEventArgs Delivery {
             get { return m_delivery; }
         }
 
-        public ReceivedMessage(BasicDeliverEventArgs delivery) :
+        public ReceivedMessage(IModel channel, BasicDeliverEventArgs delivery) :
             base(delivery.BasicProperties,
                  delivery.Body,
                  delivery.RoutingKey) {
+            m_channel  = channel;
             m_delivery = delivery;
+        }
+
+    }
+
+    public class QueueingMessageConsumer : DefaultBasicConsumer
+    {
+        protected SharedQueue m_queue;
+
+        public QueueingMessageConsumer(IModel model) : base (model) {
+            m_queue = new SharedQueue();
+        }
+
+        public SharedQueue Queue
+        {
+            get { return m_queue; }
+        }
+
+        public override void OnCancel()
+        {
+            m_queue.Close();
+            base.OnCancel();
+        }
+
+        public override void HandleBasicDeliver(string consumerTag,
+                                                ulong deliveryTag,
+                                                bool redelivered,
+                                                string exchange,
+                                                string routingKey,
+                                                IBasicProperties properties,
+                                                byte[] body)
+        {
+            BasicDeliverEventArgs e = new BasicDeliverEventArgs();
+            e.ConsumerTag = consumerTag;
+            e.DeliveryTag = deliveryTag;
+            e.Redelivered = redelivered;
+            e.Exchange = exchange;
+            e.RoutingKey = routingKey;
+            e.BasicProperties = properties;
+            e.Body = body;
+            m_queue.Enqueue(new ReceivedMessage(Model, e));
         }
 
     }
@@ -110,8 +157,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected IModel      m_sendingChannel;
         protected IModel      m_receivingChannel;
 
-        protected QueueingBasicConsumer m_consumer;
-        protected string                m_consumerTag;
+        protected QueueingMessageConsumer m_consumer;
+        protected string                  m_consumerTag;
 
         protected long m_msgIdPrefix;
         protected long m_msgIdSuffix;
@@ -224,7 +271,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected void Consume() {
-            m_consumer = new QueueingBasicConsumer(m_receivingChannel);
+            m_consumer = new QueueingMessageConsumer(m_receivingChannel);
             m_consumerTag = m_receivingChannel.BasicConsume
                 (QueueName, false, null, m_consumer);
         }
@@ -275,9 +322,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public IReceivedMessage Receive() {
             while(true) {
                 try {
-                    BasicDeliverEventArgs ev =
-                        (BasicDeliverEventArgs)m_consumer.Queue.Dequeue();
-                    return new ReceivedMessage(ev);
+                    return m_consumer.Queue.Dequeue() as IReceivedMessage;
                 } catch (System.IO.EndOfStreamException e) {
                     if (!Reconnect()) throw e;
                 }
@@ -287,10 +332,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public IReceivedMessage ReceiveNoWait() {
             while (true) {
                 try {
-                    BasicDeliverEventArgs ev =
-                        (BasicDeliverEventArgs)
-                        m_consumer.Queue.DequeueNoWait(null);
-                    return (ev == null) ? null : new ReceivedMessage(ev);
+                    IReceivedMessage m =
+                        m_consumer.Queue.DequeueNoWait(null)
+                        as IReceivedMessage;
+                    return (m == null) ? null : m;
                 } catch (System.IO.EndOfStreamException e) {
                     if (!Reconnect()) throw e;
                 }
@@ -298,15 +343,18 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public void Ack(IReceivedMessage m) {
-            //TODO: drop acks for messages received on a different
-            //channel
+            ReceivedMessage r = m as ReceivedMessage;
+            if (r.Channel != m_receivingChannel) {
+                //must have been reconnected; drop ack since there is
+                //no place for it to go
+                return;
+            }
             Exception e = AttemptOperation(delegate () {
-                    m_receivingChannel.BasicAck
-                    (((ReceivedMessage)m).Delivery.DeliveryTag, false);
+                    m_receivingChannel.BasicAck (r.Delivery.DeliveryTag, false);
                 });
+            if (e == null) return;
             //Acks must not be retried since they are tied to the
             //channel on which the message was delivered
-            if (e == null) return;
             if (!Reconnect()) throw e;
         }
 

@@ -46,17 +46,6 @@ connection-forced or internal-error. If the connection gets closed for
 any other reason, or we encounter a channel error (that doesn't close
 the connection) we do not attempt to reconnect.
 
-- catch all errors we encounter during usage of channels, and, if it
-  is a recoverable error, trigger reconnection. If the error is not
-  recoverable, or reconnection fails, throw the error to the caller.
-- on recovery, call Setup. If that fails for a recoverable reason,
-  rinse and repeat.
-- on recovery, retry the action, except in case of Ack, which we just
-  silently drop. If we encounter errors again then rinse and repeat.
-- received messages need to contain the channel on which they were
-  received so that when they are Ack'ed we can detect whether we've
-  had a reconnection in the meantime and silently drop the Ack.
-
 Need a whole bunch of settings to control reconnection policy.
 
 We need to support a single sending thread and multiple
