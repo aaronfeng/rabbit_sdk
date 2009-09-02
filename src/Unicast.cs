@@ -21,6 +21,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     }
 
     public interface IReceivedMessage : IMessage {
+        bool Redelivered { get; }
     }
 
     public delegate void SetupDelegate(IMessaging m, IModel send, IModel recv);

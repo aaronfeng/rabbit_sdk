@@ -81,6 +81,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected IModel m_channel;
         protected BasicDeliverEventArgs m_delivery;
 
+        public bool Redelivered {
+            get { return m_delivery.Redelivered; }
+        }
+
         public IModel Channel {
             get { return m_channel; }
         }
