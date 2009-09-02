@@ -41,11 +41,14 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
             DisplayStats();
         }
 
-        void UpdatePeerStats(String from, int seq) {
+        void UpdatePeerStats(String from, bool redelivered, int seq) {
+            if (redelivered) return;
+
             if (!peerStats.ContainsKey(from)) {
                 peerStats[from] = seq;
                 return;
             }
+
             int current = (int)peerStats[from];
             if (seq <= current) {
                 dups++;
@@ -93,7 +96,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                             recv++;
                             int seq = Int32.Parse
                                 (Encoding.UTF8.GetString(r.Body));
-                            UpdatePeerStats(r.From, seq);
+                            UpdatePeerStats(r.From, r.Redelivered, seq);
                             DisplayStats();
                             m.Send(m.CreateReply(r));
                         } else {
