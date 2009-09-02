@@ -1,8 +1,10 @@
+using System;
+
 namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
-    using Address   = System.String;
-    using MessageId = System.String;
-    using Name      = System.String;
+    using Address   = String;
+    using MessageId = String;
+    using Name      = String;
 
     using BasicDeliverEventArgs  = RabbitMQ.Client.Events.BasicDeliverEventArgs;
     using ClientExceptions       = RabbitMQ.Client.Exceptions;
@@ -144,15 +146,15 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public MessageId CurrentId {
-            get { return System.String.Format("{0:x8}{1:x8}",
-                                              m_msgIdPrefix, m_msgIdSuffix); }
+            get { return String.Format("{0:x8}{1:x8}",
+                                       m_msgIdPrefix, m_msgIdSuffix); }
         }
 
         public Messaging() {}
 
         public void Init(ConnectionFactory factory,
                          params AmqpTcpEndpoint[] servers) {
-            Init(System.DateTime.UtcNow.Ticks, factory, servers);
+            Init(DateTime.UtcNow.Ticks, factory, servers);
         }
 
         public void Init(long msgIdPrefix,
@@ -166,7 +168,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             InitialConnect();
         }
 
-        protected System.Exception AttemptOperation(Thunk t) {
+        protected Exception AttemptOperation(Thunk t) {
             try {
                 t();
                 return null;
@@ -190,7 +192,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         protected void InitialConnect() {
             while(true) {
-                System.Exception e = AttemptOperation(Connect);
+                Exception e = AttemptOperation(Connect);
                 if (e == null) return;
                 if (!Reconnect()) throw e;
             }
@@ -210,7 +212,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                     if (AttemptOperation(Connect) == null) return true;
                     System.Threading.Thread.Sleep(1000);
                 }
-            } catch (System.Exception) {}
+            } catch (Exception) {}
             return false;
         }
 
@@ -259,7 +261,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public void Send(IMessage m) {
             while(true) {
-                System.Exception e = AttemptOperation(delegate () {
+                Exception e = AttemptOperation(delegate () {
                         m_sendingChannel.BasicPublish(ExchangeName,
                                                       m.RoutingKey,
                                                       m.Properties, m.Body);
@@ -302,7 +304,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_connection.Abort();
         }
 
-        void System.IDisposable.Dispose() {
+        void IDisposable.Dispose() {
             Close();
         }
 
