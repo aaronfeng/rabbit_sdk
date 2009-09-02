@@ -311,8 +311,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public void Close() {
-            //FIXME: only do this if we are fully initialised
-            m_connection.Abort();
+            if (m_connection != null) m_connection.Abort();
         }
 
         void IDisposable.Dispose() {
