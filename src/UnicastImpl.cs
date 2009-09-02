@@ -191,11 +191,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected void InitialConnect() {
-            while(true) {
-                Exception e = AttemptOperation(Connect);
-                if (e == null) return;
-                if (!Reconnect()) throw e;
-            }
+            Exception e = AttemptOperation(Connect);
+            if (e == null) return;
+            if (!Reconnect()) throw e;
         }
 
         protected void Connect() {
