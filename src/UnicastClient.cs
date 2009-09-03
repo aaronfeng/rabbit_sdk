@@ -77,7 +77,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 m.Identity = me;
                 m.Sent += Sent;
                 m.Setup = delegate(IMessaging u, IModel send, IModel recv) {
-                    recv.QueueDeclare(u.Identity, true); //durable
+                    recv.QueueDeclare(me, true); //durable
+                    //We declare the recipient queue here to avoid
+                    //sending messages into the ether. That's an ok
+                    //thing to do for testing
+                    recv.QueueDeclare(you, true); //durable
                 };
                 m.Init(new ConnectionFactory(), server);
                 MessageId baseId = m.CurrentId;
