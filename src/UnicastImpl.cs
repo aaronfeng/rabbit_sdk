@@ -6,6 +6,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     using MessageId = String;
     using Name      = String;
 
+    using EndOfStreamException   = System.IO.EndOfStreamException;
+
     using BasicDeliverEventArgs  = RabbitMQ.Client.Events.BasicDeliverEventArgs;
     using ClientExceptions       = RabbitMQ.Client.Exceptions;
     using SharedQueue            = RabbitMQ.Util.SharedQueue;
@@ -327,7 +329,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             while(true) {
                 try {
                     return m_consumer.Queue.Dequeue() as IReceivedMessage;
-                } catch (System.IO.EndOfStreamException e) {
+                } catch (EndOfStreamException e) {
                     if (!Reconnect()) throw e;
                 }
             }
@@ -340,7 +342,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                         m_consumer.Queue.DequeueNoWait(null)
                         as IReceivedMessage;
                     return (m == null) ? null : m;
-                } catch (System.IO.EndOfStreamException e) {
+                } catch (EndOfStreamException e) {
                     if (!Reconnect()) throw e;
                 }
             }
