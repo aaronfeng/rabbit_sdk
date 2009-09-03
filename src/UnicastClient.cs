@@ -7,8 +7,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
     using Hashtable = System.Collections.Hashtable;
 
-    using System.Text;
-
     public class Client {
 
         public static int Main(string[] args) {
@@ -18,14 +16,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
             return 0;
         }
 
-        Hashtable peerStats = new Hashtable();
         Hashtable pending   = new Hashtable();
 
         int sent; //requests sent
         int pend; //pending requests
         int recv; //requests received
         int repl; //replies sent
-        int disc; //replies discared
+        int disc; //replies discarded
 
         Client() {
         }
@@ -38,20 +35,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 repl++;
             }
             DisplayStats();
-        }
-
-        void UpdatePeerStats(String from, bool redelivered, int seq) {
-            if (redelivered) return;
-
-            if (!peerStats.ContainsKey(from)) {
-                peerStats[from] = seq;
-                return;
-            }
-
-            int current = (int)peerStats[from];
-            if (seq > current) {
-                peerStats[from] = seq;
-            }
         }
 
         void DisplayStats() {
@@ -76,10 +59,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                     recv.QueueDeclare(you, true); //durable
                 };
                 m.Init(new ConnectionFactory(), server);
+                byte[] body = new byte[0];
                 for (int i = 0;; i++) {
                     //send
                     IMessage msg = m.CreateMessage();
-                    msg.Body = Encoding.UTF8.GetBytes("" + i);
+                    msg.Body = body;
                     msg.To   = you;
                     msg.Properties.SetPersistent(true);
                     m.Send(msg);
@@ -90,9 +74,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                         if (r == null) break;
                         if (r.CorrelationId == null) {
                             recv++;
-                            int seq = Int32.Parse
-                                (Encoding.UTF8.GetString(r.Body));
-                            UpdatePeerStats(r.From, r.Redelivered, seq);
                             DisplayStats();
                             m.Send(m.CreateReply(r));
                         } else {
