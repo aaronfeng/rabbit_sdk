@@ -26,8 +26,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         int recv; //requests received
         int repl; //replies sent
         int disc; //replies discared
-        int dups; //detected received duplicates
-        int lost; //detected lost messages
 
         Client() {
         }
@@ -51,12 +49,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
             }
 
             int current = (int)peerStats[from];
-            if (seq <= current) {
-                dups++;
-            } else {
-                if (seq > current + 1) {
-                    lost += seq - current + 1;
-                }
+            if (seq > current) {
                 peerStats[from] = seq;
             }
         }
@@ -67,10 +60,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                                  "pend {1,6}, " +
                                  "recv {2,6}, " +
                                  "repl {3,6}, " +
-                                 "disc {4,6}, " +
-                                 "dups {5,6}, " +
-                                 "lost {6,6}",
-                                 sent, pend, recv, repl, disc, dups, lost);
+                                 "disc {4,6}",
+                                 sent, pend, recv, repl, disc);
         }
 
         void Run(Address me, Address you, AmqpTcpEndpoint server, int sleep) {
