@@ -221,18 +221,28 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             InitialConnect();
         }
 
+        protected bool IsShutdownRecoverable(ShutdownEventArgs s) {
+            return (s != null &&
+                    ((s.ReplyCode == ProtocolConstants.ConnectionForced) ||
+                     (s.ReplyCode == ProtocolConstants.InternalError) ||
+                     (s.Cause is EndOfStreamException)));
+        }
+
         protected Exception AttemptOperation(Thunk t) {
             try {
                 t();
                 return null;
             } catch (ClientExceptions.AlreadyClosedException e) {
-                ShutdownEventArgs s = e.ShutdownReason;
-                if (s != null &&
-                    ((s.ReplyCode == ProtocolConstants.ConnectionForced) ||
-                     (s.ReplyCode == ProtocolConstants.InternalError))) {
+                if (IsShutdownRecoverable(e.ShutdownReason)) {
                     return e;
                 } else {
-                        throw e;
+                    throw e;
+                }
+            } catch (ClientExceptions.OperationInterruptedException e) {
+                if (IsShutdownRecoverable(e.ShutdownReason)) {
+                    return e;
+                } else {
+                    throw e;
                 }
             } catch (ClientExceptions.BrokerUnreachableException e) {
                 //TODO: we may want to be more specific here
