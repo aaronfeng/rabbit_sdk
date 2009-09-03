@@ -46,9 +46,23 @@ connection-forced or internal-error. If the connection gets closed for
 any other reason, or we encounter a channel error (that doesn't close
 the connection) we do not attempt to reconnect.
 
+** reconnect policy
 Need a whole bunch of settings to control reconnection policy.
 
-We need to support a single sending thread and multiple
+** reliability policy
+To start with, just allow selection of tx w commit after every
+message. In fact make this the default and non-tx case the alternative.
+
+Later allow choice of the following policies
+- none
+- commit every n msgs or m ms, whichever happens sooner
+- buffer at least n msgs, for at least m ms
+
+** multi threading
+To start with only allow single-threaded use of an IMessaging
+instance.
+
+Later we ought to support a single sending thread and multiple
 receiving/ack-ing threads.
 
 * todo
