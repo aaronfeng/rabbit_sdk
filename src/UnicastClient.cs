@@ -19,6 +19,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         }
 
         Hashtable peerStats = new Hashtable();
+        Hashtable pending   = new Hashtable();
 
         int sent; //requests sent
         int pend; //pending requests
@@ -84,7 +85,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                     recv.QueueDeclare(you, true); //durable
                 };
                 m.Init(new ConnectionFactory(), server);
-                MessageId baseId = m.CurrentId;
                 for (int i = 0;; i++) {
                     //send
                     IMessage msg = m.CreateMessage();
@@ -92,6 +92,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                     msg.To   = you;
                     msg.Properties.SetPersistent(true);
                     m.Send(msg);
+                    pending.Add(msg.MessageId, true);
                     //handle inbound
                     while (true) {
                         IReceivedMessage r = m.ReceiveNoWait();
@@ -104,10 +105,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                             DisplayStats();
                             m.Send(m.CreateReply(r));
                         } else {
-                            if (String.Compare(r.CorrelationId,  baseId) < 0) {
-                                disc++;
-                            } else {
+                            if (pending.ContainsKey(r.CorrelationId)) {
+                                pending.Remove(r.CorrelationId);
                                 pend--;
+                            } else {
+                                disc++;
                             }
                             DisplayStats();
                         }
