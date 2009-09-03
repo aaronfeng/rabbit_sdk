@@ -153,6 +153,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected Name    m_exchangeName  = "";
         protected Name    m_queueName     = "";
 
+        protected bool m_transactional = true;
+
         protected SetupDelegate m_setup =
             new SetupDelegate(DefaultSetup);
 
@@ -183,6 +185,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public Name QueueName {
             get { return ("".Equals(m_queueName) ? Identity : m_queueName); }
             set { m_queueName = value; }
+        }
+
+        public bool Transactional {
+            get { return m_transactional; }
+            set { m_transactional = value; }
         }
 
         public SetupDelegate Setup {
@@ -262,6 +269,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected void Connect() {
             CreateConnection();
             CreateChannels();
+            if (Transactional) m_sendingChannel.TxSelect();
             Setup(this, m_sendingChannel, m_receivingChannel);
             Consume();
         }
@@ -326,6 +334,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                         m_sendingChannel.BasicPublish(ExchangeName,
                                                       m.RoutingKey,
                                                       m.Properties, m.Body);
+                        if (Transactional) m_sendingChannel.TxCommit();
                     });
                 if (e == null) break;
                 if (!Reconnect()) throw e;

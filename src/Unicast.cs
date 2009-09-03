@@ -34,7 +34,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         Name    ExchangeName  { get; set; }
         Name    QueueName     { get; set; }
 
-        SetupDelegate Setup { get; set; }
+        bool          Transactional { get; set; }
+        SetupDelegate Setup         { get; set; }
 
         ConnectionFactory ConnectionFactory { get; }
         AmqpTcpEndpoint[] Servers { get; }
