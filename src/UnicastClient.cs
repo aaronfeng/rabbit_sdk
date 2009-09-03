@@ -19,9 +19,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         Hashtable pending   = new Hashtable();
 
         int sent; //requests sent
-        int pend; //pending requests
         int recv; //requests received
-        int repl; //replies sent
+        int pend; //pending requests
         int disc; //replies discarded
 
         Client() {
@@ -31,8 +30,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
             if (msg.CorrelationId == null) {
                 sent++;
                 pend++;
-            } else {
-                repl++;
             }
             DisplayStats();
         }
@@ -40,11 +37,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         void DisplayStats() {
             System.Console.Write("\r" +
                                  "sent {0,6}, " +
-                                 "pend {1,6}, " +
-                                 "recv {2,6}, " +
-                                 "repl {3,6}, " +
-                                 "disc {4,6}",
-                                 sent, pend, recv, repl, disc);
+                                 "recv {1,6}, " +
+                                 "pend {2,6}, " +
+                                 "disc {3,6}",
+                                 sent, recv, pend, disc);
         }
 
         void Run(Address me, Address you, AmqpTcpEndpoint server, int sleep) {
