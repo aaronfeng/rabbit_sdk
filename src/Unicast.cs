@@ -24,6 +24,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         bool Redelivered { get; }
     }
 
+    public class ReconnectPolicy {
+        public int pause    = 1000; //ms
+        public int attempts = 60;
+    }
+
     public delegate void SetupDelegate(IMessaging m, IModel send, IModel recv);
 
     public interface IMessaging : System.IDisposable {
@@ -34,8 +39,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         Name    ExchangeName  { get; set; }
         Name    QueueName     { get; set; }
 
-        bool          Transactional { get; set; }
-        SetupDelegate Setup         { get; set; }
+        bool            Transactional   { get; set; }
+        SetupDelegate   Setup           { get; set; }
+        ReconnectPolicy ReconnectPolicy { get; set; }
 
         ConnectionFactory ConnectionFactory { get; }
         AmqpTcpEndpoint[] Servers { get; }

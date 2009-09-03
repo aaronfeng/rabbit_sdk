@@ -47,7 +47,10 @@ any other reason, or we encounter a channel error (that doesn't close
 the connection) we do not attempt to reconnect.
 
 ** reconnect policy
-Need a whole bunch of settings to control reconnection policy.
+To start with, just a pause between attempts and a limit on the number
+of attempts should do.
+
+Later we may want to add exponential backoff, etc.
 
 ** reliability policy
 To start with, just allow selection of tx w commit after every

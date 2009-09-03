@@ -158,6 +158,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         protected SetupDelegate m_setup =
             new SetupDelegate(DefaultSetup);
 
+        protected ReconnectPolicy m_reconnectPolicy =
+            new ReconnectPolicy();
+
         protected ConnectionFactory m_factory;
         protected AmqpTcpEndpoint[] m_servers;
 
@@ -195,6 +198,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public SetupDelegate Setup {
             get { return m_setup; }
             set { m_setup = value; }
+        }
+
+        public ReconnectPolicy ReconnectPolicy {
+            get { return m_reconnectPolicy; }
+            set { m_reconnectPolicy = value; }
         }
 
         public ConnectionFactory ConnectionFactory {
@@ -275,11 +283,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected bool Reconnect() {
-            //TODO: proper reconnection policy
             try {
-                for (int i = 0; i < 60; i++) {
+                for (int i = 0; i < ReconnectPolicy.attempts; i++) {
                     if (AttemptOperation(Connect) == null) return true;
-                    System.Threading.Thread.Sleep(1000);
+                    System.Threading.Thread.Sleep(ReconnectPolicy.pause);
                 }
             } catch (Exception) {}
             return false;
