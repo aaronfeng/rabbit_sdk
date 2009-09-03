@@ -115,7 +115,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                         }
                         m.Ack(r);
                     }
-                    System.Threading.Thread.Sleep(sleep);
+                    //Slow down to prevent pending from growing w/o bounds
+                    System.Threading.Thread.Sleep(sleep + pend);
                 }
             }
         }
