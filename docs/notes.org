@@ -277,6 +277,7 @@ It is useful to have an msbuild, rather than just the dll in the GAC,
 because it allows source-level debugging in VS.
 
 
+** name threads ([[bug:21748]])
 * possible rabbit bugs
 
 ** WSAETIMEDOUT error in CreateConnection ([[bug:21201]])
