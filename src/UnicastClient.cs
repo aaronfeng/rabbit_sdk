@@ -44,7 +44,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         }
 
         void Run(Address me, Address you, AmqpTcpEndpoint server, int sleep) {
-            using (IMessaging m = new Messaging()) {
+            using (IConnector conn = new Connector(new ConnectionFactory(),
+                                                   server)) {
+                IMessaging m = new Messaging();
+                m.Connector = conn;
                 m.Identity = me;
                 m.Sent += Sent;
                 m.Setup = delegate(IMessaging u, IModel send, IModel recv) {
@@ -54,7 +57,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                     //thing to do for testing
                     recv.QueueDeclare(you, true); //durable
                 };
-                m.Init(new ConnectionFactory(), server);
+                m.Init();
                 byte[] body = new byte[0];
                 for (int i = 0;; i++) {
                     //send

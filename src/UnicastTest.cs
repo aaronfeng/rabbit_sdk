@@ -65,16 +65,20 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                                            IModel send, IModel recv) {
                 DeclareQueue(recv, m.QueueName);
             };
-            using (IMessaging foo = new Messaging(), bar = new Messaging()) {
+            using (IConnector conn = new Connector(factory, server)) {
+                IMessaging foo = new Messaging();
+                IMessaging bar = new Messaging();
                 //create two parties
+                foo.Connector = conn;
                 foo.Identity = "foo";
                 foo.Sent += TestHelper.Sent;
                 foo.Setup = setup;
-                foo.Init(factory, server);
+                foo.Init();
+                bar.Connector = conn;
                 bar.Identity = "bar";
                 bar.Sent += TestHelper.Sent;
                 bar.Setup = setup;
-                bar.Init(factory, server);
+                bar.Init();
 
                 //send message from foo to bar
                 IMessage mf = foo.CreateMessage();
@@ -111,25 +115,27 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         protected static void TestRelayedHelper(SetupDelegate d,
                                                 ConnectionFactory factory,
                                                 AmqpTcpEndpoint server) {
-            using (IMessaging
-                   relay = new Messaging(),
-                   foo = new Messaging(),
-                   bar = new Messaging()) {
+            using (IConnector conn = new Connector(factory, server)) {
+                IMessaging foo   = new Messaging();
+                IMessaging bar   = new Messaging();
 
-                //create relay
-                relay.Identity = "relay";
-                relay.ExchangeName = "out";
-                relay.Setup = delegate(IMessaging m, IModel send, IModel recv) {
-                    DeclareExchange(send, m.ExchangeName, "direct");
-                    DeclareExchange(recv, "in", "fanout");
-                    DeclareQueue(recv, m.QueueName);
-                    BindQueue(recv, m.QueueName, "in", "");
-                };
-                relay.Init(factory, server);
-
-                //activate relay
+                //create relay 
                 new System.Threading.Thread
                     (delegate() {
+                        IConnector relayConn = new Connector(factory, server);
+                        IMessaging relay = new Messaging();
+                        relay.Connector = relayConn;
+                        relay.Identity = "relay";
+                        relay.ExchangeName = "out";
+                        relay.Setup = delegate(IMessaging m, IModel send,
+                                               IModel recv) {
+                            DeclareExchange(send, m.ExchangeName, "direct");
+                            DeclareExchange(recv, "in", "fanout");
+                            DeclareQueue(recv, m.QueueName);
+                            BindQueue(recv, m.QueueName, "in", "");
+                        };
+                        relay.Init();
+
                         //receive messages and pass it on
                         IReceivedMessage r;
                         while (true) {
@@ -141,16 +147,18 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                     }).Start();
 
                 //create two parties
+                foo.Connector = conn;
                 foo.Identity = "foo";
                 foo.Setup = d;
                 foo.ExchangeName = "in";
                 foo.Sent += TestHelper.Sent;
-                foo.Init(factory, server);
+                foo.Init();
+                bar.Connector = conn;
                 bar.Identity = "bar";
                 bar.Setup = d;
                 bar.ExchangeName = "in";
                 bar.Sent += TestHelper.Sent;
-                bar.Init(factory, server);
+                bar.Init();
 
                 //send message from foo to bar
                 IMessage mf = foo.CreateMessage();

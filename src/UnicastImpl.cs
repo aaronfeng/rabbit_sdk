@@ -105,8 +105,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class QueueingMessageConsumer : DefaultBasicConsumer
-    {
+    public class QueueingMessageConsumer : DefaultBasicConsumer {
+
         protected SharedQueue m_queue;
 
         public QueueingMessageConsumer(IModel model) : base (model) {
@@ -147,24 +147,118 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     public delegate void Thunk();
 
+    class RecoveryHelper {
+
+        private static bool IsShutdownRecoverable(ShutdownEventArgs s) {
+            return (s != null &&
+                    ((s.ReplyCode == ProtocolConstants.ConnectionForced) ||
+                     (s.ReplyCode == ProtocolConstants.InternalError) ||
+                     (s.Cause is EndOfStreamException)));
+        }
+
+        public static Exception AttemptOperation(Thunk t) {
+            try {
+                t();
+                return null;
+            } catch (ClientExceptions.AlreadyClosedException e) {
+                if (IsShutdownRecoverable(e.ShutdownReason)) {
+                    return e;
+                } else {
+                    throw e;
+                }
+            } catch (ClientExceptions.OperationInterruptedException e) {
+                if (IsShutdownRecoverable(e.ShutdownReason)) {
+                    return e;
+                } else {
+                    throw e;
+                }
+            } catch (ClientExceptions.BrokerUnreachableException e) {
+                //TODO: we may want to be more specific here
+                return e;
+            } catch (System.IO.IOException e) {
+                //TODO: we may want to be more specific here
+                return e;
+            }
+        }
+
+    }
+
+    public class Connector : IConnector {
+
+        protected int m_pause    = 1000; //ms
+        protected int m_attempts = 60;
+
+        protected ConnectionFactory m_factory;
+        protected AmqpTcpEndpoint[] m_servers;
+
+        protected IConnection m_connection;
+
+        public int Pause {
+            get { return m_pause; }
+            set { m_pause = value; }
+        }
+        public int Attempts {
+            get { return m_attempts; }
+            set { m_attempts = value; }
+        }
+
+        public ConnectionFactory ConnectionFactory {
+            get { return m_factory; }
+        }
+        public AmqpTcpEndpoint[] Servers {
+            get { return m_servers; }
+        }
+
+        public Connector(ConnectionFactory factory,
+                         params AmqpTcpEndpoint[] servers) {
+            m_factory = factory;
+            m_servers = servers;
+        }
+
+        public IConnection Connect() {
+            lock (this) {
+                if (m_connection != null && m_connection.IsOpen)
+                    return m_connection;
+                Exception e = null;
+                for (int i = 0; i < Attempts; i++) {
+                    e = RecoveryHelper.AttemptOperation(delegate {
+                            m_connection =
+                            ConnectionFactory.CreateConnection(Servers);
+                        });
+                    if (e == null) return m_connection;
+                    System.Threading.Thread.Sleep(Pause);
+                }
+                throw(e);
+            }
+        }
+
+        public void Close() {
+            //TODO: find a way to abort a pending reconnect, rather
+            //than waiting here
+            lock (this) {
+                if (m_connection != null) m_connection.Abort();
+            }
+        }
+
+        void IDisposable.Dispose() {
+            Close();
+        }
+
+    }
+
     public class Messaging : IMessaging {
 
         protected Address m_identity;
         protected Name    m_exchangeName  = "";
         protected Name    m_queueName     = "";
 
+        protected IConnector m_connector;
+
         protected bool m_transactional = true;
 
         protected SetupDelegate m_setup =
             new SetupDelegate(DefaultSetup);
 
-        protected ReconnectPolicy m_reconnectPolicy =
-            new ReconnectPolicy();
-
-        protected ConnectionFactory m_factory;
-        protected AmqpTcpEndpoint[] m_servers;
-
-        protected IConnection m_connection;
         protected IModel      m_sendingChannel;
         protected IModel      m_receivingChannel;
 
@@ -190,6 +284,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             set { m_queueName = value; }
         }
 
+        public IConnector Connector {
+            get { return m_connector; }
+            set { m_connector = value; }
+        }
+
         public bool Transactional {
             get { return m_transactional; }
             set { m_transactional = value; }
@@ -200,19 +299,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             set { m_setup = value; }
         }
 
-        public ReconnectPolicy ReconnectPolicy {
-            get { return m_reconnectPolicy; }
-            set { m_reconnectPolicy = value; }
-        }
-
-        public ConnectionFactory ConnectionFactory {
-            get { return m_factory; }
-        }
-
-        public AmqpTcpEndpoint[] Servers {
-            get { return m_servers; }
-        }
-
         public MessageId CurrentId {
             get { return String.Format("{0:x8}{1:x8}",
                                        m_msgIdPrefix, m_msgIdSuffix); }
@@ -220,63 +306,28 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public Messaging() {}
 
-        public void Init(ConnectionFactory factory,
-                         params AmqpTcpEndpoint[] servers) {
-            Init(DateTime.UtcNow.Ticks, factory, servers);
+        public void Init() {
+            Init(DateTime.UtcNow.Ticks);
         }
 
-        public void Init(long msgIdPrefix,
-                         ConnectionFactory factory,
-                         params AmqpTcpEndpoint[] servers) {
+        public void Init(long msgIdPrefix) {
             m_msgIdPrefix = msgIdPrefix;
             m_msgIdSuffix = 0;
-            m_factory     = factory;
-            m_servers     = servers;
 
             InitialConnect();
         }
 
-        protected bool IsShutdownRecoverable(ShutdownEventArgs s) {
-            return (s != null &&
-                    ((s.ReplyCode == ProtocolConstants.ConnectionForced) ||
-                     (s.ReplyCode == ProtocolConstants.InternalError) ||
-                     (s.Cause is EndOfStreamException)));
-        }
-
-        protected Exception AttemptOperation(Thunk t) {
-            try {
-                t();
-                return null;
-            } catch (ClientExceptions.AlreadyClosedException e) {
-                if (IsShutdownRecoverable(e.ShutdownReason)) {
-                    return e;
-                } else {
-                    throw e;
-                }
-            } catch (ClientExceptions.OperationInterruptedException e) {
-                if (IsShutdownRecoverable(e.ShutdownReason)) {
-                    return e;
-                } else {
-                    throw e;
-                }
-            } catch (ClientExceptions.BrokerUnreachableException e) {
-                //TODO: we may want to be more specific here
-                return e;
-            } catch (System.IO.IOException e) {
-                //TODO: we may want to be more specific here
-                return e;
-            }
-        }
-
         protected void InitialConnect() {
-            Exception e = AttemptOperation(Connect);
+            IConnection conn = Connector.Connect();
+            Exception e = RecoveryHelper.AttemptOperation(delegate() {
+                    Connect(conn); });
             if (e == null) return;
             if (!Reconnect()) throw e;
         }
 
-        protected void Connect() {
-            CreateConnection();
-            CreateChannels();
+        protected void Connect(IConnection conn) {
+            m_sendingChannel   = conn.CreateModel();
+            m_receivingChannel = conn.CreateModel();
             if (Transactional) m_sendingChannel.TxSelect();
             Setup(this, m_sendingChannel, m_receivingChannel);
             Consume();
@@ -284,21 +335,14 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         protected bool Reconnect() {
             try {
-                for (int i = 0; i < ReconnectPolicy.attempts; i++) {
-                    if (AttemptOperation(Connect) == null) return true;
-                    System.Threading.Thread.Sleep(ReconnectPolicy.pause);
+                while (true) {
+                    IConnection conn = Connector.Connect();
+                    Exception e = RecoveryHelper.AttemptOperation(delegate {
+                            Connect(conn); });
+                    if (e == null) return true;
                 }
             } catch (Exception) {}
             return false;
-        }
-
-        protected void CreateConnection() {
-            m_connection = m_factory.CreateConnection(m_servers);
-        }
-
-        protected void CreateChannels() {
-            m_sendingChannel   = m_connection.CreateModel();
-            m_receivingChannel = m_connection.CreateModel();
         }
 
         protected void Consume() {
@@ -337,7 +381,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public void Send(IMessage m) {
             while(true) {
-                Exception e = AttemptOperation(delegate () {
+                Exception e = RecoveryHelper.AttemptOperation(delegate () {
                         m_sendingChannel.BasicPublish(ExchangeName,
                                                       m.RoutingKey,
                                                       m.Properties, m.Body);
@@ -380,21 +424,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 //no place for it to go
                 return;
             }
-            Exception e = AttemptOperation(delegate () {
+            Exception e = RecoveryHelper.AttemptOperation(delegate () {
                     m_receivingChannel.BasicAck(r.Delivery.DeliveryTag, false);
                 });
             if (e == null) return;
             //Acks must not be retried since they are tied to the
             //channel on which the message was delivered
             if (!Reconnect()) throw e;
-        }
-
-        public void Close() {
-            if (m_connection != null) m_connection.Abort();
-        }
-
-        void IDisposable.Dispose() {
-            Close();
         }
 
     }

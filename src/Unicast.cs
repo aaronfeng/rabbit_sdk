@@ -24,34 +24,29 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         bool Redelivered { get; }
     }
 
-    public class ReconnectPolicy {
-        public int pause    = 1000; //ms
-        public int attempts = 60;
+    public interface IConnector : System.IDisposable {
+        IConnection Connect();
+        void Close();
     }
 
     public delegate void SetupDelegate(IMessaging m, IModel send, IModel recv);
 
-    public interface IMessaging : System.IDisposable {
+    public interface IMessaging {
 
         event MessageEventHandler Sent;
 
-        Address Identity      { get; set; }
-        Name    ExchangeName  { get; set; }
-        Name    QueueName     { get; set; }
+        Address Identity     { get; set; }
+        Name    ExchangeName { get; set; }
+        Name    QueueName    { get; set; }
 
-        bool            Transactional   { get; set; }
-        SetupDelegate   Setup           { get; set; }
-        ReconnectPolicy ReconnectPolicy { get; set; }
+        IConnector      Connector     { get; set; }
+        bool            Transactional { get; set; }
+        SetupDelegate   Setup         { get; set; }
 
-        ConnectionFactory ConnectionFactory { get; }
-        AmqpTcpEndpoint[] Servers { get; }
+        MessageId       CurrentId { get; }
 
-        MessageId         CurrentId { get; }
-
-        void Init(ConnectionFactory factory, params AmqpTcpEndpoint[] servers);
-        void Init(long msgIdPrefix,
-                  ConnectionFactory factory, params AmqpTcpEndpoint[] servers);
-        void Close();
+        void Init();
+        void Init(long msgIdPrefix);
 
         IMessage         CreateMessage();
         IMessage         CreateReply(IMessage m);
