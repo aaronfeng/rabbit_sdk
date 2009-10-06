@@ -145,44 +145,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public delegate void Thunk();
-
-    class RecoveryHelper {
-
-        private static bool IsShutdownRecoverable(ShutdownEventArgs s) {
-            return (s != null &&
-                    ((s.ReplyCode == ProtocolConstants.ConnectionForced) ||
-                     (s.ReplyCode == ProtocolConstants.InternalError) ||
-                     (s.Cause is EndOfStreamException)));
-        }
-
-        public static Exception AttemptOperation(Thunk t) {
-            try {
-                t();
-                return null;
-            } catch (ClientExceptions.AlreadyClosedException e) {
-                if (IsShutdownRecoverable(e.ShutdownReason)) {
-                    return e;
-                } else {
-                    throw e;
-                }
-            } catch (ClientExceptions.OperationInterruptedException e) {
-                if (IsShutdownRecoverable(e.ShutdownReason)) {
-                    return e;
-                } else {
-                    throw e;
-                }
-            } catch (ClientExceptions.BrokerUnreachableException e) {
-                //TODO: we may want to be more specific here
-                return e;
-            } catch (System.IO.IOException e) {
-                //TODO: we may want to be more specific here
-                return e;
-            }
-        }
-
-    }
-
     public class Connector : IConnector {
 
         protected int m_pause    = 1000; //ms
@@ -215,21 +177,29 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_servers = servers;
         }
 
-        public IConnection Connect() {
-            lock (this) {
-                if (m_connection != null && m_connection.IsOpen)
-                    return m_connection;
-                Exception e = null;
-                for (int i = 0; i < Attempts; i++) {
-                    e = RecoveryHelper.AttemptOperation(delegate {
-                            m_connection =
-                            ConnectionFactory.CreateConnection(Servers);
-                        });
-                    if (e == null) return m_connection;
-                    System.Threading.Thread.Sleep(Pause);
+        public void Connect(ConnectionDelegate d) {
+            IConnection conn = Connect();
+            Exception e = Try(delegate() { d(conn); });
+            if (e == null) return;
+            if (!Reconnect(d)) throw e;
+        }
+
+        public bool Reconnect(ConnectionDelegate d) {
+            try {
+                while (true) {
+                    IConnection conn = Connect();
+                    Exception e = Try(delegate() { d(conn); });
+                    if (e == null) return true;
                 }
-                throw(e);
-            }
+            } catch (Exception) {}
+            return false;
+        }
+
+        public bool Try(Thunk t, ConnectionDelegate d) {
+            Exception e = Try(t);
+            if (e == null) return true;
+            if (!Reconnect(d)) throw e;
+            return false;
         }
 
         public void Close() {
@@ -242,6 +212,55 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         void IDisposable.Dispose() {
             Close();
+        }
+
+        protected IConnection Connect() {
+            lock (this) {
+                if (m_connection != null && m_connection.IsOpen)
+                    return m_connection;
+                Exception e = null;
+                for (int i = 0; i < Attempts; i++) {
+                    e = Try(delegate {
+                            m_connection =
+                            ConnectionFactory.CreateConnection(Servers);
+                        });
+                    if (e == null) return m_connection;
+                    System.Threading.Thread.Sleep(Pause);
+                }
+                throw(e);
+            }
+        }
+
+        protected static bool IsShutdownRecoverable(ShutdownEventArgs s) {
+            return (s != null &&
+                    ((s.ReplyCode == ProtocolConstants.ConnectionForced) ||
+                     (s.ReplyCode == ProtocolConstants.InternalError) ||
+                     (s.Cause is EndOfStreamException)));
+        }
+
+        protected static Exception Try(Thunk t) {
+            try {
+                t();
+                return null;
+            } catch (ClientExceptions.AlreadyClosedException e) {
+                if (IsShutdownRecoverable(e.ShutdownReason)) {
+                    return e;
+                } else {
+                    throw e;
+                }
+            } catch (ClientExceptions.OperationInterruptedException e) {
+                if (IsShutdownRecoverable(e.ShutdownReason)) {
+                    return e;
+                } else {
+                    throw e;
+                }
+            } catch (ClientExceptions.BrokerUnreachableException e) {
+                //TODO: we may want to be more specific here
+                return e;
+            } catch (System.IO.IOException e) {
+                //TODO: we may want to be more specific here
+                return e;
+            }
         }
 
     }
@@ -314,15 +333,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             m_msgIdPrefix = msgIdPrefix;
             m_msgIdSuffix = 0;
 
-            InitialConnect();
-        }
-
-        protected void InitialConnect() {
-            IConnection conn = Connector.Connect();
-            Exception e = RecoveryHelper.AttemptOperation(delegate() {
-                    Connect(conn); });
-            if (e == null) return;
-            if (!Reconnect()) throw e;
+            Connector.Connect(Connect);
         }
 
         protected void Connect(IConnection conn) {
@@ -331,18 +342,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             if (Transactional) m_sendingChannel.TxSelect();
             Setup(this, m_sendingChannel, m_receivingChannel);
             Consume();
-        }
-
-        protected bool Reconnect() {
-            try {
-                while (true) {
-                    IConnection conn = Connector.Connect();
-                    Exception e = RecoveryHelper.AttemptOperation(delegate {
-                            Connect(conn); });
-                    if (e == null) return true;
-                }
-            } catch (Exception) {}
-            return false;
         }
 
         protected void Consume() {
@@ -381,14 +380,12 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public void Send(IMessage m) {
             while(true) {
-                Exception e = RecoveryHelper.AttemptOperation(delegate () {
-                        m_sendingChannel.BasicPublish(ExchangeName,
-                                                      m.RoutingKey,
-                                                      m.Properties, m.Body);
-                        if (Transactional) m_sendingChannel.TxCommit();
-                    });
-                if (e == null) break;
-                if (!Reconnect()) throw e;
+                if (Connector.Try(delegate () {
+                            m_sendingChannel.BasicPublish(ExchangeName,
+                                                          m.RoutingKey,
+                                                          m.Properties, m.Body);
+                            if (Transactional) m_sendingChannel.TxCommit();
+                        }, Connect)) break;
             }
             //TODO: if/when IModel supports 'sent' notifications then
             //we will translate those, rather than firing our own here
@@ -401,7 +398,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                     return m_consumer.Queue.Dequeue()
                         as IReceivedMessage;
                 } catch (EndOfStreamException e) {
-                    if (!Reconnect()) throw e;
+                    if (!Connector.Reconnect(Connect)) throw e;
                 }
             }
         }
@@ -412,7 +409,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                     return m_consumer.Queue.DequeueNoWait(null)
                         as IReceivedMessage;
                 } catch (EndOfStreamException e) {
-                    if (!Reconnect()) throw e;
+                    if (!Connector.Reconnect(Connect)) throw e;
                 }
             }
         }
@@ -424,13 +421,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 //no place for it to go
                 return;
             }
-            Exception e = RecoveryHelper.AttemptOperation(delegate () {
-                    m_receivingChannel.BasicAck(r.Delivery.DeliveryTag, false);
-                });
-            if (e == null) return;
             //Acks must not be retried since they are tied to the
             //channel on which the message was delivered
-            if (!Reconnect()) throw e;
+            Connector.Try(delegate () {
+                    m_receivingChannel.BasicAck(r.Delivery.DeliveryTag, false);
+                }, Connect);
         }
 
     }

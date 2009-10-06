@@ -24,8 +24,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         bool Redelivered { get; }
     }
 
+    public delegate void ConnectionDelegate(IConnection conn);
+    public delegate void Thunk();
+
     public interface IConnector : System.IDisposable {
-        IConnection Connect();
+        void Connect(ConnectionDelegate d);
+        bool Reconnect(ConnectionDelegate d);
+        bool Try(Thunk t, ConnectionDelegate d);
         void Close();
     }
 
