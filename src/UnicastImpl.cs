@@ -216,8 +216,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         protected IConnection Connect() {
             lock (this) {
-                if (m_connection != null && m_connection.IsOpen)
-                    return m_connection;
+                if (m_connection != null) {
+                    ShutdownEventArgs closeReason = m_connection.CloseReason;
+                    if (closeReason == null) return m_connection;
+                    if (!IsShutdownRecoverable(closeReason))
+                        throw new ClientExceptions.AlreadyClosedException
+                            (closeReason);
+                }
                 Exception e = null;
                 for (int i = 0; i < Attempts; i++) {
                     e = Try(delegate {
@@ -232,7 +237,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected static bool IsShutdownRecoverable(ShutdownEventArgs s) {
-            return (s != null &&
+            return (s != null && s.Initiator != ShutdownInitiator.Application &&
                     ((s.ReplyCode == ProtocolConstants.ConnectionForced) ||
                      (s.ReplyCode == ProtocolConstants.InternalError) ||
                      (s.Cause is EndOfStreamException)));

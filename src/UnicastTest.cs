@@ -1,5 +1,8 @@
 namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
+    using EndOfStreamException   = System.IO.EndOfStreamException;
+    using RabbitMQ.Client.Exceptions;
+
     //TODO: this class should live in a separate assembly
     public class TestHelper {
 
@@ -99,7 +102,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 TestHelper.LogMessage("recv", foo, rf);
                 foo.Ack(rf);
             }
-}
+        }
 
         protected static void TestRelayed(ConnectionFactory factory,
                                           AmqpTcpEndpoint server) {
@@ -115,44 +118,49 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         protected static void TestRelayedHelper(SetupDelegate d,
                                                 ConnectionFactory factory,
                                                 AmqpTcpEndpoint server) {
-            using (IConnector conn = new Connector(factory, server)) {
-                IMessaging foo   = new Messaging();
-                IMessaging bar   = new Messaging();
+            using (IConnector conn = new Connector(factory, server),
+                   relayConn = new Connector(factory, server)) {
 
                 //create relay 
+                IMessaging relay = new Messaging();
+                relay.Connector = relayConn;
+                relay.Identity = "relay";
+                relay.ExchangeName = "out";
+                relay.Setup = delegate(IMessaging m, IModel send,
+                                       IModel recv) {
+                    DeclareExchange(send, m.ExchangeName, "direct");
+                    DeclareExchange(recv, "in", "fanout");
+                    DeclareQueue(recv, m.QueueName);
+                    BindQueue(recv, m.QueueName, "in", "");
+                };
+                relay.Init();
+
+                //run relay
                 new System.Threading.Thread
                     (delegate() {
-                        IConnector relayConn = new Connector(factory, server);
-                        IMessaging relay = new Messaging();
-                        relay.Connector = relayConn;
-                        relay.Identity = "relay";
-                        relay.ExchangeName = "out";
-                        relay.Setup = delegate(IMessaging m, IModel send,
-                                               IModel recv) {
-                            DeclareExchange(send, m.ExchangeName, "direct");
-                            DeclareExchange(recv, "in", "fanout");
-                            DeclareQueue(recv, m.QueueName);
-                            BindQueue(recv, m.QueueName, "in", "");
-                        };
-                        relay.Init();
-
                         //receive messages and pass it on
                         IReceivedMessage r;
-                        while (true) {
-                            r = relay.Receive();
-                            if (r == null) return;
-                            relay.Send(r);
-                            relay.Ack(r);
+                        try {
+                            while (true) {
+                                r = relay.Receive();
+                                relay.Send(r);
+                                relay.Ack(r);
+                            }
+                        } catch (EndOfStreamException) {
+                        } catch (AlreadyClosedException) {
+                        } catch (OperationInterruptedException) {
                         }
                     }).Start();
 
                 //create two parties
+                IMessaging foo = new Messaging();
                 foo.Connector = conn;
                 foo.Identity = "foo";
                 foo.Setup = d;
                 foo.ExchangeName = "in";
                 foo.Sent += TestHelper.Sent;
                 foo.Init();
+                IMessaging bar = new Messaging();
                 bar.Connector = conn;
                 bar.Identity = "bar";
                 bar.Setup = d;
