@@ -354,7 +354,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public IReceivedMessage Receive() {
             while(true) {
                 try {
-                    return m_consumer.Queue.Dequeue() as IReceivedMessage;
+                    return m_consumer.Queue.Dequeue()
+                        as IReceivedMessage;
                 } catch (EndOfStreamException e) {
                     if (!Reconnect()) throw e;
                 }
@@ -364,8 +365,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public IReceivedMessage ReceiveNoWait() {
             while (true) {
                 try {
-                    return (m_consumer.Queue.DequeueNoWait(null)
-                            as IReceivedMessage);
+                    return m_consumer.Queue.DequeueNoWait(null)
+                        as IReceivedMessage;
                 } catch (EndOfStreamException e) {
                     if (!Reconnect()) throw e;
                 }
