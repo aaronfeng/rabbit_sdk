@@ -184,17 +184,6 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             if (!Reconnect(d)) throw e;
         }
 
-        public bool Reconnect(ConnectionDelegate d) {
-            try {
-                while (true) {
-                    IConnection conn = Connect();
-                    Exception e = Try(delegate() { d(conn); });
-                    if (e == null) return true;
-                }
-            } catch (Exception) {}
-            return false;
-        }
-
         public bool Try(Thunk t, ConnectionDelegate d) {
             Exception e = Try(t);
             if (e == null) return true;
@@ -234,6 +223,17 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 }
                 throw(e);
             }
+        }
+
+        protected bool Reconnect(ConnectionDelegate d) {
+            try {
+                while (true) {
+                    IConnection conn = Connect();
+                    Exception e = Try(delegate() { d(conn); });
+                    if (e == null) return true;
+                }
+            } catch (Exception) {}
+            return false;
         }
 
         protected static bool IsShutdownRecoverable(ShutdownEventArgs s) {
@@ -398,25 +398,25 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public IReceivedMessage Receive() {
+            IReceivedMessage res = null;
             while(true) {
-                try {
-                    return m_consumer.Queue.Dequeue()
-                        as IReceivedMessage;
-                } catch (EndOfStreamException e) {
-                    if (!Connector.Reconnect(Connect)) throw e;
-                }
+                if (Connector.Try(delegate() {
+                            res = m_consumer.Queue.Dequeue()
+                                as IReceivedMessage;
+                        }, Connect)) break;
             }
+            return res;
         }
 
         public IReceivedMessage ReceiveNoWait() {
+            IReceivedMessage res = null;
             while (true) {
-                try {
-                    return m_consumer.Queue.DequeueNoWait(null)
-                        as IReceivedMessage;
-                } catch (EndOfStreamException e) {
-                    if (!Connector.Reconnect(Connect)) throw e;
-                }
+                if (Connector.Try(delegate() {
+                            res = m_consumer.Queue.DequeueNoWait(null)
+                                as IReceivedMessage;
+                        }, Connect)) break;
             }
+            return res;
         }
 
         public void Ack(IReceivedMessage m) {
