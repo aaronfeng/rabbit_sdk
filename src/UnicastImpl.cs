@@ -380,7 +380,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                 return;
             }
             Exception e = AttemptOperation(delegate () {
-                    m_receivingChannel.BasicAck (r.Delivery.DeliveryTag, false);
+                    m_receivingChannel.BasicAck(r.Delivery.DeliveryTag, false);
                 });
             if (e == null) return;
             //Acks must not be retried since they are tied to the
