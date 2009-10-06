@@ -70,6 +70,10 @@ receiving/ack-ing threads.
 
 * todo
 
+** TODO allow multiple instances to share same connection
+** TODO split out sending and receiving side
 ** TODO API docs
 ** TODO test and fix error handling
+- sanity checking of props on Init
+- ?
 ** TODO use nunit
