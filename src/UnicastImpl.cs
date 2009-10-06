@@ -364,10 +364,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public IReceivedMessage ReceiveNoWait() {
             while (true) {
                 try {
-                    IReceivedMessage m =
-                        m_consumer.Queue.DequeueNoWait(null)
-                        as IReceivedMessage;
-                    return (m == null) ? null : m;
+                    return (m_consumer.Queue.DequeueNoWait(null)
+                            as IReceivedMessage);
                 } catch (EndOfStreamException e) {
                     if (!Reconnect()) throw e;
                 }
