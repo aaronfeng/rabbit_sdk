@@ -1,7 +1,10 @@
-namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
+namespace RabbitMQX.Client.MessagePatterns.Unicast.Test {
+
+    using RabbitMQ.Client;
+    using RabbitMQ.Client.Exceptions;
+    using RabbitMQ.Client.MessagePatterns.Unicast;
 
     using EndOfStreamException   = System.IO.EndOfStreamException;
-    using RabbitMQ.Client.Exceptions;
 
     //TODO: this class should live in a separate assembly
     public class TestHelper {
@@ -71,9 +74,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
         protected static void TestDirect(ConnectionFactory factory,
                                          AmqpTcpEndpoint server) {
-            using (IConnector conn = new Connector(factory, server)) {
+            using (IConnector conn = Factory.CreateConnector(factory, server)) {
                 //create two parties
-                IMessaging foo = new Messaging();
+                IMessaging foo = Factory.CreateMessaging();
                 foo.Connector = conn;
                 foo.Identity = "foo";
                 foo.Sent += TestHelper.Sent;
@@ -81,7 +84,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                     DeclareQueue(channel, foo.Identity);
                 };
                 foo.Init();
-                IMessaging bar = new Messaging();
+                IMessaging bar = Factory.CreateMessaging();
                 bar.Connector = conn;
                 bar.Identity = "bar";
                 bar.Sent += TestHelper.Sent;
@@ -132,11 +135,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                                                 MessagingClosure receiverSetup,
                                                 ConnectionFactory factory,
                                                 AmqpTcpEndpoint server) {
-            using (IConnector conn = new Connector(factory, server),
-                   relayConn = new Connector(factory, server)) {
+            using (IConnector conn = Factory.CreateConnector(factory, server),
+                   relayConn = Factory.CreateConnector(factory, server)) {
 
                 //create relay 
-                IMessaging relay = new Messaging();
+                IMessaging relay = Factory.CreateMessaging();
                 relay.Connector = relayConn;
                 relay.Identity = "relay";
                 relay.ExchangeName = "out";
@@ -168,7 +171,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                     }).Start();
 
                 //create two parties
-                IMessaging foo = new Messaging();
+                IMessaging foo = Factory.CreateMessaging();
                 foo.Connector = conn;
                 foo.Identity = "foo";
                 (foo as ISender).Setup = senderSetup(foo);
@@ -176,7 +179,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 foo.ExchangeName = "in";
                 foo.Sent += TestHelper.Sent;
                 foo.Init();
-                IMessaging bar = new Messaging();
+                IMessaging bar = Factory.CreateMessaging();
                 bar.Connector = conn;
                 bar.Identity = "bar";
                 (bar as ISender).Setup = senderSetup(bar);

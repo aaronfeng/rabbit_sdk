@@ -105,7 +105,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class QueueingMessageConsumer : DefaultBasicConsumer {
+    class QueueingMessageConsumer : DefaultBasicConsumer {
 
         protected SharedQueue m_queue;
 
@@ -145,7 +145,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class Connector : IConnector {
+    class Connector : IConnector {
 
         protected int m_pause    = 1000; //ms
         protected int m_attempts = 60;
@@ -270,7 +270,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class Sender : ISender {
+    class Sender : ISender {
 
         protected IConnector m_connector;
         protected SetupDelegate m_setup;
@@ -370,7 +370,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class Receiver : IReceiver {
+    class Receiver : IReceiver {
 
         protected IConnector m_connector;
         protected SetupDelegate m_setup;
@@ -462,7 +462,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class Messaging : IMessaging {
+    class Messaging : IMessaging {
 
         protected ISender   m_sender    = new Sender();
         protected IReceiver m_receiver  = new Receiver();

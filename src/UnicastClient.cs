@@ -1,6 +1,9 @@
 using System;
 
-namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
+namespace RabbitMQX.Client.MessagePatterns.Unicast.Test {
+
+    using RabbitMQ.Client;
+    using RabbitMQ.Client.MessagePatterns.Unicast;
 
     using Address   = String;
     using MessageId = String;
@@ -44,9 +47,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         }
 
         void Run(Address me, Address you, AmqpTcpEndpoint server, int sleep) {
-            using (IConnector conn = new Connector(new ConnectionFactory(),
-                                                   server)) {
-                IMessaging m = new Messaging();
+            using (IConnector conn =
+                   Factory.CreateConnector(new ConnectionFactory(), server)) {
+                IMessaging m = Factory.CreateMessaging();
                 m.Connector = conn;
                 m.Identity = me;
                 m.Sent += Sent;

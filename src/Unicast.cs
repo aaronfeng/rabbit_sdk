@@ -80,4 +80,24 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         new void Init(long msgIdPrefix);
     }
 
+    public class Factory {
+
+        public static IConnector CreateConnector
+            (ConnectionFactory factory, params AmqpTcpEndpoint[] servers) {
+            return new Connector(factory, servers);
+        }
+
+        public static ISender CreateSender() {
+            return new Sender();
+        }
+
+        public static IReceiver CreateReceiver() {
+            return new Receiver();;
+        }
+
+        public static IMessaging CreateMessaging() {
+            return new Messaging();
+        }
+    }
+
 }
