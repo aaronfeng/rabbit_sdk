@@ -28,6 +28,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     public delegate void Thunk();
 
     public interface IConnector : System.IDisposable {
+        int Pause    { get; set; }
+        int Attempts { get; set; }
+
         void Connect(ConnectionDelegate d);
         bool Try(Thunk t, ConnectionDelegate d);
         void Close();
