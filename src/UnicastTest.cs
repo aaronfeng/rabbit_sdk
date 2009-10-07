@@ -69,14 +69,14 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 DeclareQueue(recv, m.QueueName);
             };
             using (IConnector conn = new Connector(factory, server)) {
-                IMessaging foo = new Messaging();
-                IMessaging bar = new Messaging();
                 //create two parties
+                IMessaging foo = new Messaging();
                 foo.Connector = conn;
                 foo.Identity = "foo";
                 foo.Sent += TestHelper.Sent;
                 foo.Setup = setup;
                 foo.Init();
+                IMessaging bar = new Messaging();
                 bar.Connector = conn;
                 bar.Identity = "bar";
                 bar.Sent += TestHelper.Sent;
