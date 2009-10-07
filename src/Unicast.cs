@@ -4,7 +4,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     using MessageId = System.String;
     using Name      = System.String;
 
-    public delegate void MessageEventHandler(IMessaging sender, IMessage m);
+    public delegate void MessageEventHandler(IMessage m);
 
     public interface IMessage {
         IBasicProperties Properties { get; set; }
@@ -36,31 +36,48 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         void Close();
     }
 
-    public delegate void SetupDelegate(IMessaging m, IModel send, IModel recv);
+    public delegate void SetupDelegate(IModel channel);
 
-    public interface IMessaging {
+    public interface IMessagingCommon {
+        IConnector    Connector { get; set; }
+        Address       Identity  { get; set; }
+    }
+
+    public interface ISender : IMessagingCommon {
+        SetupDelegate Setup         { get; set; }
+
+        Name          ExchangeName  { get; set; }
+        bool          Transactional { get; set; }
+
+        MessageId     CurrentId { get; }
 
         event MessageEventHandler Sent;
-
-        Address Identity     { get; set; }
-        Name    ExchangeName { get; set; }
-        Name    QueueName    { get; set; }
-
-        IConnector      Connector     { get; set; }
-        bool            Transactional { get; set; }
-        SetupDelegate   Setup         { get; set; }
-
-        MessageId       CurrentId { get; }
 
         void Init();
         void Init(long msgIdPrefix);
 
-        IMessage         CreateMessage();
-        IMessage         CreateReply(IMessage m);
-        void             Send(IMessage m);
+        IMessage CreateMessage();
+        IMessage CreateReply(IMessage m);
+        void     Send(IMessage m);
+    }
+
+    public interface IReceiver : IMessagingCommon {
+        SetupDelegate Setup     { get; set; }
+
+        Name          QueueName { get; set; }
+
+        void Init();
+
         IReceivedMessage Receive();
         IReceivedMessage ReceiveNoWait();
         void             Ack(IReceivedMessage m);
+    }
+
+    public interface IMessaging : ISender, IReceiver {
+        new SetupDelegate Setup { get; set; }
+        
+        new void Init();
+        new void Init(long msgIdPrefix);
     }
 
 }

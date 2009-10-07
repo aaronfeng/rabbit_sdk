@@ -270,52 +270,24 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
-    public class Messaging : IMessaging {
-
-        protected Address m_identity;
-        protected Name    m_exchangeName  = "";
-        protected Name    m_queueName     = "";
+    public class Sender : ISender {
 
         protected IConnector m_connector;
-
+        protected SetupDelegate m_setup;
+        protected Address m_identity;
+        protected Name m_exchangeName  = "";
         protected bool m_transactional = true;
 
-        protected SetupDelegate m_setup =
-            new SetupDelegate(DefaultSetup);
-
-        protected IModel      m_sendingChannel;
-        protected IModel      m_receivingChannel;
-
-        protected QueueingMessageConsumer m_consumer;
-        protected string                  m_consumerTag;
+        protected IModel m_channel;
 
         protected long m_msgIdPrefix;
         protected long m_msgIdSuffix;
 
         public event MessageEventHandler Sent;
 
-        public Address Identity {
-            get { return m_identity; }
-            set { m_identity = value; }
-        }
-        public Name ExchangeName {
-            get { return m_exchangeName; }
-            set { m_exchangeName = value; }
-        }
-
-        public Name QueueName {
-            get { return ("".Equals(m_queueName) ? Identity : m_queueName); }
-            set { m_queueName = value; }
-        }
-
         public IConnector Connector {
             get { return m_connector; }
             set { m_connector = value; }
-        }
-
-        public bool Transactional {
-            get { return m_transactional; }
-            set { m_transactional = value; }
         }
 
         public SetupDelegate Setup {
@@ -323,12 +295,27 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             set { m_setup = value; }
         }
 
+        public Address Identity {
+            get { return m_identity; }
+            set { m_identity = value; }
+        }
+
+        public Name ExchangeName {
+            get { return m_exchangeName; }
+            set { m_exchangeName = value; }
+        }
+
+        public bool Transactional {
+            get { return m_transactional; }
+            set { m_transactional = value; }
+        }
+
         public MessageId CurrentId {
             get { return String.Format("{0:x8}{1:x8}",
                                        m_msgIdPrefix, m_msgIdSuffix); }
         }
 
-        public Messaging() {}
+        public Sender() {}
 
         public void Init() {
             Init(DateTime.UtcNow.Ticks);
@@ -342,21 +329,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         protected void Connect(IConnection conn) {
-            m_sendingChannel   = conn.CreateModel();
-            m_receivingChannel = conn.CreateModel();
-            if (Transactional) m_sendingChannel.TxSelect();
-            Setup(this, m_sendingChannel, m_receivingChannel);
-            Consume();
-        }
-
-        protected void Consume() {
-            m_consumer = new QueueingMessageConsumer(m_receivingChannel);
-            m_consumerTag = m_receivingChannel.BasicConsume
-                (QueueName, false, null, m_consumer);
-        }
-
-        protected void Cancel() {
-            m_receivingChannel.BasicCancel(m_consumerTag);
+            m_channel = conn.CreateModel();
+            if (Transactional) m_channel.TxSelect();
+            if (Setup != null) Setup(m_channel);
         }
 
         protected MessageId NextId() {
@@ -365,13 +340,9 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             return res;
         }
 
-        public static void DefaultSetup(IMessaging m,
-                                        IModel send, IModel recv) {
-        }
-
         public IMessage CreateMessage() {
             IMessage m = new Message();
-            m.Properties = m_sendingChannel.CreateBasicProperties();
+            m.Properties = m_channel.CreateBasicProperties();
             m.From       = Identity;
             m.MessageId  = NextId();
             return m;
@@ -386,15 +357,71 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public void Send(IMessage m) {
             while(true) {
                 if (Connector.Try(delegate () {
-                            m_sendingChannel.BasicPublish(ExchangeName,
-                                                          m.RoutingKey,
-                                                          m.Properties, m.Body);
-                            if (Transactional) m_sendingChannel.TxCommit();
+                            m_channel.BasicPublish(ExchangeName,
+                                                   m.RoutingKey,
+                                                   m.Properties, m.Body);
+                            if (Transactional) m_channel.TxCommit();
                         }, Connect)) break;
             }
             //TODO: if/when IModel supports 'sent' notifications then
             //we will translate those, rather than firing our own here
-            if (Sent != null) Sent(this, m);
+            if (Sent != null) Sent(m);
+        }
+
+    }
+
+    public class Receiver : IReceiver {
+
+        protected IConnector m_connector;
+        protected SetupDelegate m_setup;
+        protected Address m_identity;
+        protected Name    m_queueName = "";
+
+        protected IModel m_channel;
+
+        protected QueueingMessageConsumer m_consumer;
+        protected string                  m_consumerTag;
+
+        public IConnector Connector {
+            get { return m_connector; }
+            set { m_connector = value; }
+        }
+
+        public SetupDelegate Setup {
+            get { return m_setup; }
+            set { m_setup = value; }
+        }
+
+        public Address Identity {
+            get { return m_identity; }
+            set { m_identity = value; }
+        }
+
+        public Name QueueName {
+            get { return ("".Equals(m_queueName) ? Identity : m_queueName); }
+            set { m_queueName = value; }
+        }
+
+        public Receiver() {}
+
+        public void Init() {
+            Connector.Connect(Connect);
+        }
+
+        protected void Connect(IConnection conn) {
+            m_channel = conn.CreateModel();
+            if (Setup != null) Setup(m_channel);
+            Consume();
+        }
+
+        protected void Consume() {
+            m_consumer = new QueueingMessageConsumer(m_channel);
+            m_consumerTag = m_channel.BasicConsume
+                (QueueName, false, null, m_consumer);
+        }
+
+        protected void Cancel() {
+            m_channel.BasicCancel(m_consumerTag);
         }
 
         public IReceivedMessage Receive() {
@@ -421,7 +448,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public void Ack(IReceivedMessage m) {
             ReceivedMessage r = m as ReceivedMessage;
-            if (r.Channel != m_receivingChannel) {
+            if (r.Channel != m_channel) {
                 //must have been reconnected; drop ack since there is
                 //no place for it to go
                 return;
@@ -429,8 +456,113 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             //Acks must not be retried since they are tied to the
             //channel on which the message was delivered
             Connector.Try(delegate () {
-                    m_receivingChannel.BasicAck(r.Delivery.DeliveryTag, false);
+                    m_channel.BasicAck(r.Delivery.DeliveryTag, false);
                 }, Connect);
+        }
+
+    }
+
+    public class Messaging : IMessaging {
+
+        protected ISender   m_sender    = new Sender();
+        protected IReceiver m_receiver  = new Receiver();
+
+        public IConnector Connector {
+            get { return m_sender.Connector; }
+            set { m_sender.Connector = value; m_receiver.Connector = value; }
+        }
+
+        public SetupDelegate Setup {
+            get { return m_sender.Setup; }
+            set { m_sender.Setup = value; m_receiver.Setup = value; }
+        }
+
+        SetupDelegate ISender.Setup {
+            get { return m_sender.Setup; }
+            set { m_sender.Setup = value; }
+        }
+
+        SetupDelegate IReceiver.Setup {
+            get { return m_receiver.Setup; }
+            set { m_receiver.Setup = value; }
+        }
+
+        public Address Identity {
+            get { return m_sender.Identity; }
+            set { m_sender.Identity = value; m_receiver.Identity = value; }
+        }
+
+        public Name ExchangeName {
+            get { return m_sender.ExchangeName; }
+            set { m_sender.ExchangeName = value; }
+        }
+
+        public bool Transactional {
+            get { return m_sender.Transactional; }
+            set { m_sender.Transactional = value; }
+        }
+
+        public MessageId CurrentId {
+            get { return m_sender.CurrentId; }
+        }
+
+        public Name QueueName {
+            get { return m_receiver.QueueName; }
+            set { m_receiver.QueueName = value; }
+        }
+
+        public event MessageEventHandler Sent {
+            add { m_sender.Sent += value; }
+            remove { m_sender.Sent -= value; }
+        }
+
+        void ISender.Init() {
+            m_sender.Init();
+        }
+
+        void ISender.Init(long msgIdPrefix) {
+            m_sender.Init(msgIdPrefix);
+        }
+
+        void IReceiver.Init() {
+            m_receiver.Init();
+        }
+
+        public void Init() {
+            (this as ISender).Init();
+            (this as IReceiver).Init();
+        }
+
+        public void Init(long msgIdPrefix) {
+            (this as ISender).Init(msgIdPrefix);
+            (this as IReceiver).Init();
+        }
+
+        public IMessage CreateMessage() {
+            return m_sender.CreateMessage();
+        }
+
+        public IMessage CreateReply(IMessage m) {
+            return m_sender.CreateReply(m);
+        }
+
+        public void Send(IMessage m) {
+            m_sender.Send(m);
+        }
+
+        public IReceivedMessage Receive() {
+            return m_receiver.Receive();
+        }
+
+        public IReceivedMessage ReceiveNoWait() {
+            return m_receiver.ReceiveNoWait();
+        }
+
+        public void Ack(IReceivedMessage m) {
+            m_receiver.Ack(m);
+        }
+
+        public Messaging() {
         }
 
     }

@@ -26,7 +26,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
         Client() {
         }
 
-        void Sent(IMessaging sender, IMessage msg) {
+        void Sent(IMessage msg) {
             if (msg.CorrelationId == null) {
                 sent++;
                 pend++;
@@ -50,12 +50,14 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 m.Connector = conn;
                 m.Identity = me;
                 m.Sent += Sent;
-                m.Setup = delegate(IMessaging u, IModel send, IModel recv) {
-                    recv.QueueDeclare(me, true); //durable
+                (m as ISender).Setup = delegate(IModel channel) {
                     //We declare the recipient queue here to avoid
                     //sending messages into the ether. That's an ok
                     //thing to do for testing
-                    recv.QueueDeclare(you, true); //durable
+                    channel.QueueDeclare(you, true); //durable
+                };
+                (m as IReceiver).Setup = delegate(IModel channel) {
+                    channel.QueueDeclare(me, true); //durable
                 };
                 m.Init();
                 byte[] body = new byte[0];

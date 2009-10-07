@@ -6,15 +6,21 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
     //TODO: this class should live in a separate assembly
     public class TestHelper {
 
-        public static void Sent(IMessaging sender, IMessage m) {
-                LogMessage("sent", sender, m);
+        public static void Sent(IMessage m) {
+            LogMessage("sent", m.From, m);
         }
 
         public static void LogMessage(string action,
-                                         IMessaging actor,
-                                         IMessage m) {
+                                      string actor,
+                                      IMessage m) {
             System.Console.WriteLine("{0} {1} {2}",
-                                     actor.Identity, action, Decode(m.Body));
+                                     actor, action, Decode(m.Body));
+        }
+
+        public static void LogMessage(string action,
+                                      IMessaging actor,
+                                      IMessage m) {
+            LogMessage(action, actor.Identity, m);
         }
 
         public static byte[] Encode(string s) {
@@ -27,6 +33,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
     }
 
+    public delegate SetupDelegate MessagingClosure(IMessaging m);
 
     //NB: For testing we declare all resources as auto-delete and
     //non-durable, to avoid manual cleanup. More typically the
@@ -64,23 +71,23 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
         protected static void TestDirect(ConnectionFactory factory,
                                          AmqpTcpEndpoint server) {
-            SetupDelegate setup = delegate(IMessaging m,
-                                           IModel send, IModel recv) {
-                DeclareQueue(recv, m.QueueName);
-            };
             using (IConnector conn = new Connector(factory, server)) {
                 //create two parties
                 IMessaging foo = new Messaging();
                 foo.Connector = conn;
                 foo.Identity = "foo";
                 foo.Sent += TestHelper.Sent;
-                foo.Setup = setup;
+                (foo as IReceiver).Setup = delegate(IModel channel) {
+                    DeclareQueue(channel, foo.Identity);
+                };
                 foo.Init();
                 IMessaging bar = new Messaging();
                 bar.Connector = conn;
                 bar.Identity = "bar";
                 bar.Sent += TestHelper.Sent;
-                bar.Setup = setup;
+                (bar as IReceiver).Setup = delegate(IModel channel) {
+                    DeclareQueue(channel, bar.Identity);
+                };
                 bar.Init();
 
                 //send message from foo to bar
@@ -106,16 +113,23 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
 
         protected static void TestRelayed(ConnectionFactory factory,
                                           AmqpTcpEndpoint server) {
-            TestRelayedHelper
-                (delegate(IMessaging m, IModel send, IModel recv) {
-                    DeclareExchange(send, m.ExchangeName, "fanout");
-                    DeclareExchange(recv, "out", "direct");
-                    DeclareQueue(recv, m.QueueName);
-                    BindQueue(recv, m.QueueName, "out", m.QueueName);
-                }, factory, server);
+            MessagingClosure senderSetup = delegate(IMessaging m) {
+                return delegate(IModel channel) {
+                    DeclareExchange(channel, m.ExchangeName, "fanout");
+                };
+            };
+            MessagingClosure receiverSetup = delegate(IMessaging m) {
+                return delegate(IModel channel) {
+                    DeclareExchange(channel, "out", "direct");
+                    DeclareQueue(channel, m.QueueName);
+                    BindQueue(channel, m.QueueName, "out", m.QueueName);
+                };
+            };
+            TestRelayedHelper(senderSetup, receiverSetup, factory, server);
         }
 
-        protected static void TestRelayedHelper(SetupDelegate d,
+        protected static void TestRelayedHelper(MessagingClosure senderSetup,
+                                                MessagingClosure receiverSetup,
                                                 ConnectionFactory factory,
                                                 AmqpTcpEndpoint server) {
             using (IConnector conn = new Connector(factory, server),
@@ -126,12 +140,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 relay.Connector = relayConn;
                 relay.Identity = "relay";
                 relay.ExchangeName = "out";
-                relay.Setup = delegate(IMessaging m, IModel send,
-                                       IModel recv) {
-                    DeclareExchange(send, m.ExchangeName, "direct");
-                    DeclareExchange(recv, "in", "fanout");
-                    DeclareQueue(recv, m.QueueName);
-                    BindQueue(recv, m.QueueName, "in", "");
+                (relay as ISender).Setup = delegate(IModel channel) {
+                    DeclareExchange(channel, relay.ExchangeName, "direct");
+                };
+                (relay as IReceiver).Setup = delegate(IModel channel) {
+                    DeclareExchange(channel, "in", "fanout");
+                    DeclareQueue(channel, relay.QueueName);
+                    BindQueue(channel, relay.QueueName, "in", "");
                 };
                 relay.Init();
 
@@ -156,14 +171,16 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 IMessaging foo = new Messaging();
                 foo.Connector = conn;
                 foo.Identity = "foo";
-                foo.Setup = d;
+                (foo as ISender).Setup = senderSetup(foo);
+                (foo as IReceiver).Setup = receiverSetup(foo);
                 foo.ExchangeName = "in";
                 foo.Sent += TestHelper.Sent;
                 foo.Init();
                 IMessaging bar = new Messaging();
                 bar.Connector = conn;
                 bar.Identity = "bar";
-                bar.Setup = d;
+                (bar as ISender).Setup = senderSetup(bar);
+                (bar as IReceiver).Setup = receiverSetup(bar);
                 bar.ExchangeName = "in";
                 bar.Sent += TestHelper.Sent;
                 bar.Init();
@@ -213,7 +230,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast.Test {
                 BindQueue(ch, "bar", "out", "bar");
             }
             //set up participants, send some messages
-            TestRelayedHelper(Messaging.DefaultSetup, factory, server);
+            MessagingClosure dummy = delegate(IMessaging m) {
+                return delegate(IModel channel) {};
+            };
+            TestRelayedHelper(dummy, dummy, factory, server);
         }
 
     }
