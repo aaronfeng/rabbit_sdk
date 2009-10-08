@@ -35,7 +35,10 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         public Address From {
             get { return Properties.UserId; }
-            set { Properties.UserId = value; }
+            set {
+                Properties.UserId = value;
+                if (value == null) Properties.ClearUserId();
+            }
         }
         public Address To {
             get { return RoutingKey; }
@@ -43,15 +46,24 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
         public Address ReplyTo {
             get { return Properties.ReplyTo; }
-            set { Properties.ReplyTo = value; }
+            set {
+                Properties.ReplyTo = value;
+                if (value == null) Properties.ClearReplyTo();
+            }
         }
         public MessageId MessageId {
             get { return Properties.MessageId; }
-            set { Properties.MessageId = value; }
+            set {
+                Properties.MessageId = value;
+                if (value == null) Properties.ClearMessageId();
+            }
         }
         public MessageId CorrelationId {
             get { return Properties.CorrelationId; }
-            set { Properties.CorrelationId = value; }
+            set {
+                Properties.CorrelationId = value;
+                if (value == null) Properties.ClearCorrelationId();
+            }
         }
 
         public Message() {
@@ -67,11 +79,11 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
             IMessage m = new Message(Properties.Clone() as IBasicProperties,
                                      Body,
                                      RoutingKey);
-            m.From = To;
-            m.To = ReplyTo == null ? From : ReplyTo;
-            m.Properties.ClearReplyTo();
+            m.From          = To;
+            m.To            = ReplyTo == null ? From : ReplyTo;
+            m.ReplyTo       = null;
             m.CorrelationId = MessageId;
-            m.Properties.ClearMessageId();
+            m.MessageId     = null;
 
             return m;
         }
@@ -270,6 +282,18 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
     }
 
+    class Validator {
+
+        public static void CheckNotNull(Object thing, Object c, string prop) {
+            if (thing == null) {
+                string msg = String.Format("'{0}' property in {1} " +
+                                           "must not be null",
+                                           prop, c);
+                throw new InvalidOperationException(msg);
+            }
+        }
+    }
+
     class Sender : ISender {
 
         protected IConnector m_connector;
@@ -322,10 +346,16 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public void Init(long msgIdPrefix) {
+            CheckProps();
             m_msgIdPrefix = msgIdPrefix;
             m_msgIdSuffix = 0;
 
             Connector.Connect(Connect);
+        }
+
+        protected void CheckProps() {
+            Validator.CheckNotNull(Connector, this, "Connector");
+            Validator.CheckNotNull(ExchangeName, this, "ExchangeName");
         }
 
         protected void Connect(IConnection conn) {
@@ -405,7 +435,13 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         public Receiver() {}
 
         public void Init() {
+            CheckProps();
             Connector.Connect(Connect);
+        }
+
+        protected void CheckProps() {
+            Validator.CheckNotNull(Connector, this, "Connector");
+            Validator.CheckNotNull(QueueName, this, "QueueName");
         }
 
         protected void Connect(IConnection conn) {

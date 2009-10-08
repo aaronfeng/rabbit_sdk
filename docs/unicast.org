@@ -70,9 +70,7 @@ receiving/ack-ing threads.
 
 * todo
 
+** TODO find a way to dispose of connector while its reconnecting
 ** TODO update design notes
 ** TODO API docs
-** TODO test and fix error handling
-- sanity checking of props on Init
-- ?
 ** TODO use nunit
