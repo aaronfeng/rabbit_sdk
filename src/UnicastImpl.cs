@@ -7,6 +7,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
     using Name      = String;
 
     using EndOfStreamException   = System.IO.EndOfStreamException;
+    using ManualResetEvent       = System.Threading.ManualResetEvent;
 
     using BasicDeliverEventArgs  = RabbitMQ.Client.Events.BasicDeliverEventArgs;
     using ClientExceptions       = RabbitMQ.Client.Exceptions;
@@ -167,6 +168,8 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
 
         protected IConnection m_connection;
 
+        protected ManualResetEvent m_closed = new ManualResetEvent(false);
+
         public int Pause {
             get { return m_pause; }
             set { m_pause = value; }
@@ -204,8 +207,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
         }
 
         public void Close() {
-            //TODO: find a way to abort a pending reconnect, rather
-            //than waiting here
+            m_closed.Set();
             lock (this) {
                 if (m_connection != null) m_connection.Abort();
             }
@@ -231,7 +233,7 @@ namespace RabbitMQ.Client.MessagePatterns.Unicast {
                             ConnectionFactory.CreateConnection(Servers);
                         });
                     if (e == null) return m_connection;
-                    System.Threading.Thread.Sleep(Pause);
+                    if (m_closed.WaitOne(Pause)) break;
                 }
                 throw(e);
             }
