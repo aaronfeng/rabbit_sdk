@@ -1,3 +1,2 @@
-The RabbitMQ.Client.dll needs to be present in the lib dir. This must
-have been built from the 'default' branch in hg, at least until
-RabbitMQ 1.7. is out.
+The unicast library that used to live in this repository is now part
+of http://hg.rabbitmq.com/rabbitmq-dotnet-messagepatterns/
