@@ -229,6 +229,9 @@ because it allows source-level debugging in VS.
 There doesn't seem to be a protocol version agnostic way of getting
 hold of protocol constants, even though most of them are common across
 all versions.
+** TODO allow sending of custom client_properties ([[bug:21949]])
+** TODO display received client_properties ([[bug:21948]])
+** TODO listing of queue consumers ([[bug:21963]], [[bug:21966]])
 ** DL{Q,E} ([[bug:20337]])
 
 For messages that get redelivered too often. See spec of basic.deliver
@@ -352,6 +355,28 @@ We don't collect stats in queues - everything that happens to a queue
 can be inferred from the data collected by channels. That does mean
 though that direct interactions with the queue, e.g. from a plugin,
 are not recorded.
+
+*** alternative design
+
+Stats could be computed from more general events. These general events
+would cover all interesting activities in an AMQP broker.
+
+The design then neatly divides into the following areas
+- event generation
+- event distribution/collection/recording
+
+Some questions:
+- which events are interesting?
+- how do we minimise the impact on performance?
+  - filters that control which events are generated
+  - limit / filter what information is included in events
+  - pre-aggregate events
+- how should we distribute events?
+  - Erlang eventing, feeding into
+    - log file
+    - AMQP messaging
+
+- how do we control distribution of events?
 
 * possible rabbit bugs
 
