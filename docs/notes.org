@@ -164,7 +164,6 @@ Let's assume it is a proxy and experiment with that.
   - perhaps just have another X to which errors are sent
 
 ** algo agent
-
 ** provisioning tool
 provisions the queue(s) for every client
 provisions record of all agreements
@@ -185,7 +184,6 @@ manual intervention that needs to bring the state of the three
 parties back in sync
 
 ** system upgrades
-
 ** scaling
 
 *** DONE get some estimates of baseline, peak, growth
@@ -232,7 +230,7 @@ all versions.
 ** TODO allow sending of custom client_properties ([[bug:21949]])
 ** TODO display received client_properties ([[bug:21948]])
 ** TODO listing of queue consumers ([[bug:21963]], [[bug:21966]])
-** DL{Q,E} ([[bug:20337]])
+** TODO DL{Q,E} ([[bug:20337]])
 
 For messages that get redelivered too often. See spec of basic.deliver
 for some hints. The limit & dlq name would be configured on a
@@ -378,6 +376,16 @@ Some questions:
 
 - how do we control distribution of events?
 
+** queue browsing
+The ability to look at the messages in a queue w/o consuming them.
+- doesn't need to be a snapshot
+- doesn't need to be in the protocol - all the use cases we can think
+  of are for troubleshooting
+
+advantages over consume + nack:
+- doesn't prevent messages from getting delivered to consumers
+- no re-ordering
+- light-weight - little/no state to keep
 * possible rabbit bugs
 
 ** WSAETIMEDOUT error in CreateConnection ([[bug:21201]])
@@ -427,10 +435,7 @@ replies and notifications.
 
 * tasks
 ** protocol
-*** reliability layer
 *** HA layer
-*** unicast refinements, tests and docs
-*** unicast port to Java
 ** refine security analysis
 Aaron to get Mark to look at current doc and then see whether he needs
 any help
