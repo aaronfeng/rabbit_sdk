@@ -1,7 +1,8 @@
 * settings
 
 #+LINK: bug https://extra.lshift.net/bugzilla/show_bug.cgi?id=
-#+TODO: TODO | WAITING | DONE
+#+TODO: TODO | PEND | DONE
+#+SEQ_TODO: TODO PEND DONE
 
 * to do
 ** client API
@@ -199,7 +200,10 @@ msg size: few k
 
 ** IM
 
-* possible rabbit extensions
+* rabbit bugs & extensions
+
+** DONE when rabbit is very busy, rabbitmqctl can time out ([[bug:21202]])
+with a {badrpc,timeout}
 
 ** DONE allow suppression of queue declaration in Subscription ([[bug:21286]])
 resolution: we actually ended up removing the use of Subscription
@@ -223,13 +227,25 @@ because it allows source-level debugging in VS.
 
 
 ** DONE name threads ([[bug:21748]])
+** DONE improve BrokerUnreachableException display ([[bug:22100]])
+** DONE socket left open on ssl upgrade error ([[bug:22114]])
+** DONE AOOR exception in SslHelper.CertificateSelectionCallback ([[bug:22087]])
+** DONE ssl w/o server cert validation ([[bug:22089]])
+** DONE ssl acceptor can stall ([[bug:22117]])
+** DONE display received client_properties ([[bug:21948]])
+** TODO ssl on Windows proper ([[bug:22091]])
+** TODO redesign connection factory ([[bug:21899]])
+- clear separation of transport and amqp connection params
+- consistent handling of ssl
+- configuration file support
+** TODO allow ssl to be enabled on all code paths ([[bug:21873]])
+** TODO clarify effects of deleting default exchange ([[bug:22101]])
 ** TODO generic protocol constants ([[bug:21537]])
 There doesn't seem to be a protocol version agnostic way of getting
 hold of protocol constants, even though most of them are common across
 all versions.
 ** TODO allow sending of custom client_properties ([[bug:21949]])
-** TODO display received client_properties ([[bug:21948]])
-** TODO listing of queue consumers ([[bug:21963]], [[bug:21966]])
+** TODO listing of queue consumers ([[bug:21966]])
 ** TODO DL{Q,E} ([[bug:20337]])
 
 For messages that get redelivered too often. See spec of basic.deliver
@@ -386,8 +402,6 @@ advantages over consume + nack:
 - doesn't prevent messages from getting delivered to consumers
 - no re-ordering
 - light-weight - little/no state to keep
-* possible rabbit bugs
-
 ** WSAETIMEDOUT error in CreateConnection ([[bug:21201]])
 ...when establishing lots of connections and running tight publish
 loops in them.
@@ -405,9 +419,6 @@ I tried increasing the Mainloop thread priority, but that didn't make
 a difference.
 Running the same test on a faster machine (quad core, rather than a VM
 on some old dual core), made the problem go awway :(
-
-** DONE when rabbit is very busy, rabbitmqctl can time out ([[bug:21202]])
-with a {badrpc,timeout}
 
 * resolved
 
